@@ -1,7 +1,7 @@
 // Package proto is the JSON-lines wire protocol between the door and the
 // neighborhood server: one JSON object per line, request then response, over
 // a persistent TCP connection that begins with a token-gated hello. The wire
-// carries state, never pixels; the door renders.
+// carries the world, never pixels; the door renders.
 package proto
 
 import (
@@ -10,17 +10,16 @@ import (
 	"errors"
 	"io"
 
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 	"cannibalcasa/internal/world"
 )
 
-// Version bumps when the wire shape changes incompatibly.
-const Version = 1
+const Version = 2
 
-// Request types.
 const (
 	Hello     = "hello"
 	Join      = "join"
+	Sync      = "sync"
 	Do        = "do"
 	Hood      = "hood"
 	Casserole = "casserole"
@@ -34,7 +33,8 @@ type Request struct {
 	Token   string      `json:"token,omitempty"`
 	BBS     string      `json:"bbs,omitempty"`
 	Handle  string      `json:"handle,omitempty"`
-	Action  game.Action `json:"action,omitempty"`
+	Command sim.Command `json:"command,omitempty"`
+	Speed   int         `json:"speed,omitempty"`
 	To      string      `json:"to,omitempty"`
 	ID      int         `json:"id,omitempty"`
 }
@@ -42,16 +42,15 @@ type Request struct {
 type Response struct {
 	OK     bool                `json:"ok"`
 	Err    string              `json:"err,omitempty"`
-	State  *game.State         `json:"state,omitempty"`
-	Result *game.Result        `json:"result,omitempty"`
-	Events []game.Event        `json:"events,omitempty"`
+	World  *sim.World          `json:"world,omitempty"`
+	Events []sim.Event         `json:"events,omitempty"`
+	Ticks  int                 `json:"ticks,omitempty"`
 	Hood   *world.Neighborhood `json:"hood,omitempty"`
-	Server string              `json:"server,omitempty"` // server version, in the hello reply
+	Server string              `json:"server,omitempty"`
 }
 
-const maxLine = 4 * 1024 * 1024
+const maxLine = 8 * 1024 * 1024
 
-// Conn frames JSON lines over any stream.
 type Conn struct {
 	r *bufio.Reader
 	w io.Writer

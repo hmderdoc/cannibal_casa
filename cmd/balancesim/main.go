@@ -1,8 +1,9 @@
-// balancesim plays Cannibal Casa headless with a handful of bot policies and
-// reports survival, stars and causes of death, so the economy can be tuned
-// before a caller ever sees it. Same rules package as the door and server.
+// balancesim runs Cannibal Casa's simulation headless under a few build
+// orders and reports how the machine fares over N days: survival, meals,
+// stars, cash, heat, and what killed it. Same package as the door and server.
 //
-//	go run ./cmd/balancesim -runs 200 -days 60
+//	go run ./cmd/balancesim -runs 50 -days 60
+//	go run ./cmd/balancesim -runs 1 -days 30 -trace factory
 package main
 
 import (
@@ -10,248 +11,85 @@ import (
 	"fmt"
 	"sort"
 
-	gm "cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 )
 
-type policy struct {
-	name string
-	// step is called whenever the bot may act; return false when it wants to
-	// end the phase.
-	step func(s *gm.State) bool
+type plan struct {
+	name  string
+	order []string // fixtures bought in order whenever affordable (+$40 reserve)
+	tune  func(w *sim.World)
 }
 
-var tracing bool
-
-func act(s *gm.State, a gm.Action) bool {
-	r := gm.Apply(s, a)
-	if tracing {
-		if r.Err != "" {
-			fmt.Printf("   %s %s %d -> ERR %s\n", a.Kind, a.Name, a.ID, r.Err)
-		} else {
-			for _, e := range r.Events {
-				fmt.Printf("   %s %s -> [%s] %s\n", a.Kind, a.Name, e.Kind, e.Text)
-			}
-		}
-	}
-	return r.Err == ""
-}
-
-// eatIfHungry eats the best food dish when hunger is low.
-func eatIfHungry(s *gm.State, below int) bool {
-	if s.Hunger >= below {
-		return false
-	}
-	best := -1
-	for i, d := range s.Dishes {
-		if gm.RecipeByID(d.Recipe).Food && (best < 0 || d.Quality > s.Dishes[best].Quality) {
-			best = i
-		}
-	}
-	if best < 0 {
-		return false
-	}
-	return act(s, gm.Action{Kind: "eat", ID: s.Dishes[best].ID})
-}
-
-// cookSomething cooks the best recipe the fridge supports, keeping a small
-// pantry rather than turning the whole fridge into dishes that spoil.
-func cookSomething(s *gm.State) bool {
-	if len(s.Dishes) >= 2 {
-		return false
-	}
-	order := []string{"charcuterie", "sous_vide", "pulled_pork", "ribs", "fava", "meat_pie", "pan_sear", "liver_onions", "fritters", "jerky", "tartare", "soylent"}
-	for _, id := range order {
-		rc := gm.RecipeByID(id)
-		if !s.CanCook(rc) {
-			continue
-		}
-		if act(s, gm.Action{Kind: "cook", Name: id}) {
-			return true
-		}
-	}
-	return false
-}
-
-// broth turns loose bones into soup whenever the stockpot allows.
-func broth(s *gm.State) bool {
-	if !s.CanCook(gm.RecipeByID("broth")) {
-		return false
-	}
-	for _, e := range s.Evidence {
-		if e.Kind == "bones" && !e.Buried {
-			return act(s, gm.Action{Kind: "cook", Name: "broth"})
-		}
-	}
-	return false
-}
-
-// tidy disposes of one piece of evidence with the first available method.
-func tidy(s *gm.State) bool {
-	for _, e := range s.Evidence {
-		if e.Buried {
-			continue
-		}
-		for _, m := range s.DisposalMethods(e) {
-			if act(s, gm.Action{Kind: "dispose", ID: e.ID, Name: m}) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func buyNext(s *gm.State, wish []string) bool {
-	for _, id := range wish {
-		f := gm.FixtureByID(id)
-		if s.Has(id) || s.Cash < f.Cost+40 {
-			continue
-		}
-		if act(s, gm.Action{Kind: "build", Name: id}) {
-			return true
-		}
-	}
-	return false
-}
-
-// hunt goes out only when the larder is thin: a fed cannibal who hunts every
-// night racks up missing-person Heat faster than any fence can cool it.
-func hunt(s *gm.State) bool {
-	if s.Phase != gm.Night || len(s.Prey) == 0 {
-		return false
-	}
-	if len(s.Fridge)+len(s.Dishes) >= 3 || s.Livestock() > 0 {
-		return false
-	}
-	best := s.Prey[0]
-	for _, p := range s.Prey {
-		if s.HuntChance(p) > s.HuntChance(best) {
-			best = p
-		}
-	}
-	return act(s, gm.Action{Kind: "hunt", Name: best})
-}
-
-func butcherWhenNeeded(s *gm.State) bool {
-	if len(s.Fridge) > 2 || s.Livestock() == 0 {
-		return false
-	}
-	for _, c := range s.Captives {
-		if !c.Renfield {
-			return act(s, gm.Action{Kind: "butcher", ID: c.ID})
-		}
-	}
-	return false
-}
-
-var policies = []policy{
-	{"glutton", func(s *gm.State) bool {
-		if s.Phase == gm.Night && len(s.Prey) > 0 {
-			if act(s, gm.Action{Kind: "hunt", Name: s.Prey[0]}) {
-				return true
-			}
-		}
-		return eatIfHungry(s, 55) || butcherWhenNeeded(s) || cookSomething(s)
-	}},
-	{"tidy", func(s *gm.State) bool {
-		if s.Phase == gm.Morning && s.Mission == nil && s.Cash < 60 {
-			if act(s, gm.Action{Kind: "mission", Name: "day_job"}) {
-				return true
-			}
-		}
-		return eatIfHungry(s, 55) || broth(s) || tidy(s) || buyNext(s, []string{"microwave", "stockpot", "plot_2"}) || butcherWhenNeeded(s) || cookSomething(s) || hunt(s)
-	}},
-	{"builder", func(s *gm.State) bool {
-		wish := []string{"microwave", "compost", "shed", "fence", "grinder", "smoker", "dining_set", "chair", "cell_2", "soundproof", "freezer", "curtains", "knife_set"}
-		if s.Phase == gm.Morning && s.Mission == nil && s.Cash < 150 && s.Hunger > 40 {
-			if act(s, gm.Action{Kind: "mission", Name: "day_job"}) {
-				return true
-			}
-		}
-		if s.Phase == gm.Afternoon && s.Mission == nil && (len(s.Dishes) >= 3) {
-			if act(s, gm.Action{Kind: "mission", Name: "market"}) {
-				return true
-			}
-		}
-		if s.Phase == gm.Evening && s.Has("dining_set") && s.Heat > 35 {
-			if act(s, gm.Action{Kind: "dinner"}) {
-				return true
-			}
-		}
-		return eatIfHungry(s, 55) || tidy(s) || buyNext(s, wish) || butcherWhenNeeded(s) || cookSomething(s) || hunt(s)
-	}},
-	{"sweeney", func(s *gm.State) bool {
-		wish := []string{"grinder", "microwave", "shed", "compost", "fence", "dining_set", "curtains", "stockpot", "fridge_big", "smoker", "chair", "vhs", "cameras"}
-		if s.Phase == gm.Morning && s.Mission == nil && s.Cash < 150 && s.Hunger > 40 {
-			if act(s, gm.Action{Kind: "mission", Name: "day_job"}) {
-				return true
-			}
-		}
-		if s.Phase == gm.Afternoon && s.Mission == nil && (len(s.Dishes) >= 2) {
-			if act(s, gm.Action{Kind: "mission", Name: "market"}) {
-				return true
-			}
-		}
-		if s.Phase == gm.Evening && s.Has("dining_set") && s.Heat > 30 {
-			if act(s, gm.Action{Kind: "dinner"}) {
-				return true
-			}
-		}
-		if s.Has("chair") {
-			for _, c := range s.Captives {
-				if !c.Renfield && c.LastTry != s.Day && s.Renfields() < s.RenfieldCap() {
-					if act(s, gm.Action{Kind: "brainwash", ID: c.ID}) {
-						return true
-					}
-				}
-			}
-		}
-		return eatIfHungry(s, 55) || tidy(s) || buyNext(s, wish) || butcherWhenNeeded(s) || cookSomething(s) || hunt(s)
-	}},
+var plans = []plan{
+	{"hermit", nil, nil},
+	{"tidy", []string{"microwave", "stockpot", "plot_2", "compost", "fence"}, nil},
+	{"factory", []string{"lure_couch", "microwave", "grinder", "stand", "stockpot", "cell_2", "compost", "freezer", "fence", "shed", "cell_3", "soundproof", "gruel", "curtains", "smoker", "chair", "cot", "cameras"},
+		func(w *sim.World) { w.Policy.Brainwash = true }},
+	{"sweeney", []string{"grinder", "stand", "microwave", "lure_openhouse", "stockpot", "compost", "fence", "dining_set", "wine_rack", "cell_2", "freezer", "knife_set", "curtains", "cell_3", "chair", "vhs", "cot", "big_tv", "smoker", "cameras", "trapdoor_pro"},
+		func(w *sim.World) { w.Policy.Brainwash = true; w.Policy.PantryTarget = 4 }},
 }
 
 func main() {
-	runs := flag.Int("runs", 100, "games per policy")
-	days := flag.Int("days", 60, "in-game days per game")
-	trace := flag.String("trace", "", "print every event of the first game for this policy")
+	runs := flag.Int("runs", 30, "games per plan")
+	days := flag.Int("days", 60, "days per game")
+	trace := flag.String("trace", "", "print the ticker of the first game for this plan")
+	deaths := flag.Bool("deaths", false, "print the last ticker lines before each death")
 	flag.Parse()
-	for _, p := range policies {
-		var survived, totalDays, totalStars, totalMeals, totalCash, totalCaptured int
+	for _, p := range plans {
+		var alive, totalDays, stars, meals, captured, sold int
+		var cash, heat float64
 		causes := map[string]int{}
-		heatSum := 0
 		for run := 0; run < *runs; run++ {
-			s := gm.NewState("bot", "sim", int64(run*7919+1))
-			tracing = *trace == p.name && run == 0
-			for s.Day <= *days && s.Alive {
-				gm.GrantAllowance(s, gm.Rules{DaysPerDay: 1, BankMax: 3}, fmt.Sprint("d", s.Day, s.Phase))
-				for i := 0; i < 12 && p.step(s); i++ {
-				}
-				r := gm.Apply(s, gm.Action{Kind: "end_phase"})
-				if *trace == p.name && run == 0 {
-					fmt.Printf("-- d%d %s hunger=%d heat=%d cash=%d fridge=%d dishes=%d captives=%d evidence=%d\n", s.Day, s.Phase, s.Hunger, s.Heat, s.Cash, len(s.Fridge), len(s.Dishes), len(s.Captives), len(s.Evidence))
-					for _, e := range r.Events {
-						fmt.Printf("   [%s] %s\n", e.Kind, e.Text)
+			w := sim.New("bot", "sim", int64(run*7919+1))
+			if p.tune != nil {
+				p.tune(w)
+			}
+			shown := 0
+			for d := 0; d < *days && w.Alive; d++ {
+				for _, id := range p.order {
+					f := sim.FixtureByID(id)
+					if !w.Has(id) && w.Cash >= float64(f.Cost+40) {
+						w.Build(id)
 					}
 				}
-				if r.Err != "" {
-					break
+				w.Advance(1440)
+				if *trace == p.name && run == 0 {
+					for ; shown < len(w.Ticker); shown++ {
+						l := w.Ticker[shown]
+						fmt.Printf("d%-3d %02d:%02d [%s] %s\n", l.Tick/1440+1, l.Tick%1440/60, l.Tick%60, l.Kind, l.Text)
+					}
+					fmt.Printf("     -- heat %.0f cash %.0f livestock %d fridge %d pantry %d pile %d buried %d hunger %.0f workers %d\n",
+						w.Heat, w.Cash, len(w.Livestock), len(w.Fridge), len(w.Pantry), len(w.Pile), w.Buried, w.Player().Hunger, len(w.Workers))
 				}
 			}
-			if s.Alive {
-				survived++
+			if w.Alive {
+				alive++
 			} else {
-				causes[s.Cause]++
+				causes[w.Cause]++
+				if *deaths && run < 4 {
+					fmt.Printf("  %s run %d died day %d (%s):\n", p.name, run, w.DaysAlive(), w.Cause)
+					start := len(w.Ticker) - 24
+					if start < 0 {
+						start = 0
+					}
+					for _, l := range w.Ticker[start:] {
+						if l.Kind == "bad" || l.Kind == "heat" || l.Kind == "warn" {
+							fmt.Printf("    d%-3d %02d:%02d %s\n", l.Tick/1440+1, l.Tick%1440/60, l.Tick%60, l.Text)
+						}
+					}
+				}
 			}
-			totalDays += s.Day
-			totalStars += s.Stars
-			totalMeals += s.Meals
-			totalCash += s.Cash
-			totalCaptured += s.Stats.Captured
-			heatSum += s.Heat
+			totalDays += w.DaysAlive()
+			stars += w.Stars
+			meals += w.Stats.Meals
+			captured += w.Stats.Captured
+			sold += w.Stats.Sold
+			cash += w.Cash
+			heat += w.Heat
 		}
 		n := float64(*runs)
-		fmt.Printf("%-8s survive %3.0f%%  days %5.1f  stars %5.1f  meals %5.1f  cash $%5.0f  captured %4.1f  heat %4.1f\n",
-			p.name, 100*float64(survived)/n, float64(totalDays)/n, float64(totalStars)/n, float64(totalMeals)/n,
-			float64(totalCash)/n, float64(totalCaptured)/n, float64(heatSum)/n)
+		fmt.Printf("%-8s survive %3.0f%%  days %5.1f  stars %5.1f  meals %5.1f  captured %5.1f  sold %5.1f  cash $%5.0f  heat %4.1f\n",
+			p.name, 100*float64(alive)/n, float64(totalDays)/n, float64(stars)/n, float64(meals)/n, float64(captured)/n, float64(sold)/n, cash/n, heat/n)
 		var keys []string
 		for k := range causes {
 			keys = append(keys, k)

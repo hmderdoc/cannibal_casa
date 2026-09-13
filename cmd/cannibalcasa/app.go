@@ -1,13 +1,13 @@
-// The door's application state and key handling. The app owns the player's
-// State (as last returned by the backend), the caller's position on the
-// current floor, the journal, and at most one modal (a menu or text panel).
+// The door's application state and key handling. The app holds the last
+// World the backend returned, the cursor, the speed, and at most one modal.
+// The world advances on its own; the app just asks for it once a second.
 package main
 
 import (
 	"fmt"
 	"strings"
 
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 	"cannibalcasa/internal/ui"
 	"cannibalcasa/internal/world"
 )
@@ -21,94 +21,112 @@ type app struct {
 	be        world.Backend
 	bbs       string
 	handle    string
-	st        *game.State
+	w         *sim.World
 	buf       *ui.Buffer
 	cfg       config
-	level     game.Level
-	px, py    int
-	log       []game.Event
+	level     sim.Level
+	cx, cy    int
+	speed     int // 0 paused, 1, 2, 4
+	notes     []sim.Line
 	modal     modal
 	quit      bool
 	seenDeath bool
+	status    string
 }
 
 func newApp(be world.Backend, bbs, handle string, cfg config, buf *ui.Buffer) *app {
-	a := &app{be: be, bbs: bbs, handle: handle, cfg: cfg, buf: buf}
-	a.px, a.py = game.Plans[game.Ground].Spawn()
+	a := &app{be: be, bbs: bbs, handle: handle, cfg: cfg, buf: buf, speed: 1}
+	a.cx, a.cy = 8, 7
 	return a
 }
 
-// say appends to the journal.
-func (a *app) say(kind, format string, args ...any) {
-	a.log = append(a.log, game.Event{Kind: kind, Text: fmt.Sprintf(format, args...)})
-	if len(a.log) > 300 {
-		a.log = a.log[len(a.log)-300:]
+// note adds a door-side line to the journal (errors, connection news).
+func (a *app) note(kind, format string, args ...any) {
+	t := int64(0)
+	if a.w != nil {
+		t = a.w.Clock
+	}
+	a.notes = append(a.notes, sim.Line{Tick: t, Kind: kind, Text: fmt.Sprintf(format, args...)})
+	if len(a.notes) > 100 {
+		a.notes = a.notes[len(a.notes)-100:]
 	}
 }
 
-func (a *app) absorb(st *game.State, r game.Result, err error) bool {
+func (a *app) take(w *sim.World, err error) bool {
+	if w != nil {
+		a.w = w
+	}
 	if err != nil {
-		a.say("bad", "Connection trouble: %v", err)
+		a.note("warn", "%s", capitalize(err.Error()))
 		return false
-	}
-	if st != nil {
-		a.st = st
-	}
-	if r.Err != "" {
-		a.say("warn", "%s", r.Err)
-		return false
-	}
-	for _, e := range r.Events {
-		a.log = append(a.log, e)
-	}
-	if len(a.log) > 300 {
-		a.log = a.log[len(a.log)-300:]
 	}
 	a.checkDeath()
 	return true
 }
 
-// do sends an action and folds the result into the journal.
-func (a *app) do(act game.Action) bool {
-	st, r, err := a.be.Do(a.bbs, a.handle, act)
-	return a.absorb(st, r, err)
+func (a *app) do(c sim.Command) bool {
+	w, err := a.be.Do(a.bbs, a.handle, c)
+	return a.take(w, err)
 }
 
 func (a *app) join() {
-	st, ev, err := a.be.Join(a.bbs, a.handle)
+	w, ev, ticks, err := a.be.Join(a.bbs, a.handle)
 	if err != nil {
-		a.say("bad", "Could not join the neighborhood: %v", err)
+		a.note("bad", "Could not join the neighborhood: %v", err)
 		return
 	}
-	a.st = st
-	for _, e := range st.Journal {
-		if len(a.log) < 6 {
-			a.log = append(a.log, game.Event{Kind: "dim", Text: e})
-		}
+	a.w = w
+	for _, e := range ev {
+		a.note(e.Kind, "%s", e.Text)
 	}
-	a.log = append(a.log, ev...)
-	if st.ColorMode == "256" {
+	if w.ColorMode == "256" {
 		a.buf.Mode = ui.Mode256
+	}
+	if ticks >= 60 {
+		a.modal = awayDigest(a, ticks)
 	}
 	a.checkDeath()
 }
 
+func (a *app) sync() {
+	if a.w == nil {
+		return
+	}
+	speed := a.speed
+	if a.modal != nil {
+		if _, ok := a.modal.(*panel); ok {
+			// reading a panel doesn't stop the world; menus do (you're at the controls)
+		} else {
+			speed = 0
+		}
+	}
+	if !a.w.Alive {
+		speed = 0
+	}
+	w, err := a.be.Sync(a.bbs, a.handle, speed)
+	if err != nil {
+		a.note("bad", "Lost the neighborhood: %v", err)
+		return
+	}
+	a.w = w
+	a.checkDeath()
+}
+
 func (a *app) checkDeath() {
-	if a.st != nil && !a.st.Alive && !a.seenDeath {
+	if a.w != nil && !a.w.Alive && !a.seenDeath {
 		a.seenDeath = true
 		a.modal = deathScreen(a)
 	}
 }
 
-func (a *app) plan() game.Plan { return game.Plans[a.level] }
+func (a *app) plan() sim.Plan { return sim.Plans[a.level] }
 
-// handleKey routes a key to the modal if one is open, else to the map.
 func (a *app) handleKey(k key) {
 	if a.modal != nil {
 		a.modal.key(a, k)
 		return
 	}
-	if a.st == nil {
+	if a.w == nil {
 		if k == keyEsc || k == 'q' || k == 'Q' {
 			a.quit = true
 		}
@@ -116,111 +134,173 @@ func (a *app) handleKey(k key) {
 	}
 	switch k {
 	case keyUp, 'w', 'W':
-		a.move(0, -1)
+		a.moveCursor(0, -1)
 	case keyDown, 's', 'S':
-		a.move(0, 1)
+		a.moveCursor(0, 1)
 	case keyLeft, 'a', 'A':
-		a.move(-1, 0)
+		a.moveCursor(-1, 0)
 	case keyRight, 'd', 'D':
-		a.move(1, 0)
-	case 'h', 'H':
-		a.openHunt()
-	case 'l', 'L':
-		a.openLivestock()
-	case 'p', 'P':
-		a.openDinner()
-	case keyEnter, ' ':
-		a.interact()
+		a.moveCursor(1, 0)
+	case keyEnter:
+		a.inspectCursor()
 	case keyTab, '>', '.':
 		a.switchLevel(1)
 	case '<', ',':
 		a.switchLevel(-1)
-	case 't', 'T':
-		a.endPhase()
+	case ' ':
+		if a.speed == 0 {
+			a.speed = 1
+		} else {
+			a.speed = 0
+		}
+	case '1':
+		a.speed = 1
+	case '2':
+		a.speed = 2
+	case '3', '4':
+		a.speed = 4
 	case 'b', 'B':
 		a.openBuild("")
-	case 'c', 'C':
-		a.openCookbook()
-	case 'e', 'E':
-		a.openPantry()
-	case 'x', 'X':
-		a.openEvidence()
-	case 'm', 'M':
-		a.openMissions()
+	case 'p', 'P':
+		a.openPolicy()
+	case 'l', 'L':
+		a.openRoster()
+	case 'i', 'I':
+		a.openInventory()
 	case 'n', 'N':
 		a.openNeighborhood()
-	case 'f', 'F':
-		a.openFridge()
 	case 'o', 'O':
 		a.openOptions()
-	case '?':
+	case '?', 'h', 'H':
 		a.openHelp()
 	case keyEsc, 'q', 'Q':
-		a.modal = confirm("Leave the house?", "Your progress is saved. The neighbors will assume you're at work.", func(a *app) { a.quit = true })
+		a.modal = confirm("Leave the house?", "The machine keeps running while you're gone. The neighbors will assume you're at work.", func(a *app) { a.quit = true })
 	}
 }
 
-func (a *app) move(dx, dy int) {
+func (a *app) moveCursor(dx, dy int) {
 	p := a.plan()
-	nx, ny := a.px+dx, a.py+dy
-	if !p.Walkable(nx, ny) {
+	nx, ny := a.cx+dx, a.cy+dy
+	if ny < 0 || ny >= len(p.Rows) || nx < 0 || nx >= len(p.Rows[0]) {
 		return
 	}
-	a.px, a.py = nx, ny
-	if p.SlotAt(nx, ny) != 0 {
-		a.interact()
-	}
+	a.cx, a.cy = nx, ny
 }
 
 func (a *app) switchLevel(d int) {
-	a.level = game.Level((int(a.level) + d + int(game.NumLevels)) % int(game.NumLevels))
-	a.px, a.py = a.plan().Spawn()
+	a.level = sim.Level((int(a.level) + d + int(sim.NumLevels)) % int(sim.NumLevels))
+	p := a.plan()
+	if a.cy >= len(p.Rows) {
+		a.cy = len(p.Rows) / 2
+	}
 }
 
-// interact is bump-to-use: whatever fixture slot the caller stands on.
-func (a *app) interact() {
-	slot := a.plan().SlotAt(a.px, a.py)
+// inspectCursor opens whatever is under the cursor: a fixture panel, a build
+// offer for an empty slot, or a description of an entity.
+func (a *app) inspectCursor() {
+	p := a.plan()
+	pos := sim.Pos{L: a.level, X: a.cx, Y: a.cy}
+	for _, wk := range a.w.Workers {
+		if wk.Pos == pos {
+			a.modal = textPanel(wk.Name, describeWorker(wk))
+			return
+		}
+	}
+	for _, ps := range a.w.Passers {
+		if ps.Pos == pos {
+			v := sim.VictimByID(ps.Victim)
+			a.modal = textPanel(v.Name, []sim.Line{{Kind: "dim", Text: v.Flavor},
+				{Kind: "info", Text: fmt.Sprintf("Marbling %s, fight %d. Missed after %d days (Heat %+.0f). Trap odds right now: %d%%.", strings.Repeat("*", v.Marbling), v.Fight, v.NoticeDays, v.HeatMissing, trapOdds(a.w, v))}})
+			return
+		}
+	}
+	for _, vs := range a.w.Visitors {
+		if vs.Pos == pos {
+			a.modal = textPanel(capitalize(vs.Name), []sim.Line{{Kind: "warn", Text: visitorText(vs)}})
+			return
+		}
+	}
+	slot := p.SlotAt(a.cx, a.cy)
 	if slot == 0 {
 		return
 	}
-	f := game.FixtureAtSlot(a.level, slot)
-	if f == nil {
+	fs := sim.FixturesAtSlot(a.level, slot)
+	var owned *sim.Fixture
+	for _, f := range fs {
+		if a.w.Has(f.ID) {
+			owned = f
+		}
+	}
+	if owned != nil {
+		a.openFixture(owned)
 		return
 	}
-	if !a.st.Has(f.ID) {
-		a.openBuild(f.ID)
-		return
+	for _, f := range fs {
+		if f.Prereq == "" || a.w.Has(f.Prereq) {
+			a.openBuild(f.ID)
+			return
+		}
 	}
-	switch f.ID {
-	case "stove", "grinder", "smoker", "sous_vide", "dehydrator", "blender", "stockpot", "knife_set", "wine_rack", "grill", "drying_rack", "soap_molds":
-		a.openCookbook()
-	case "fridge", "fridge_big", "freezer", "chest_freezer":
-		a.openFridge()
-	case "cell_1", "cell_2", "cell_3", "cell_4", "cell_5", "chair", "vhs", "buffet", "gruel", "soundproof", "cot":
-		a.openLivestock()
-	case "plot_1", "plot_2", "plot_3", "compost", "chipper", "lye_tub", "microwave", "van", "shed":
-		a.openEvidence()
-	case "dining_set":
-		a.openDinner()
-	case "garden", "lure_airbnb":
-		a.modal = textPanel(f.Name, []game.Event{{Kind: "info", Text: f.Desc}, {Kind: "cash", Text: "Pays out every morning."}})
-	default:
-		a.modal = textPanel(f.Name, []game.Event{{Kind: "info", Text: f.Desc}})
+	a.openBuild(fs[0].ID)
+}
+
+func trapOdds(w *sim.World, v *sim.Victim) int {
+	c := 45
+	if w.Has("trapdoor_pro") {
+		c = 70
+	}
+	if w.Has("chemistry") {
+		c += 12
+	}
+	if w.Has("telescope") && w.IsNight() {
+		c += 8
+	}
+	if w.Has("gnome") {
+		c += 3
+	}
+	c -= v.Fight * 8
+	if c < 10 {
+		c = 10
+	}
+	if c > 95 {
+		c = 95
+	}
+	return c
+}
+
+func visitorText(v *sim.Visitor) string {
+	switch v.Kind {
+	case "inspector":
+		return fmt.Sprintf("Tier %d visitor. They'll knock, look around from the front door, and leave. Anything visible (%s) counts against you.", v.Tier, "cars at the curb, bags on the step without a fence, screaming without soundproofing")
+	case "dog":
+		return "Gladys's labradoodle. Digs where things are buried. A fence keeps it out."
+	case "police":
+		return "It's over."
+	}
+	return v.Name
+}
+
+func describeWorker(wk *sim.Worker) []sim.Line {
+	kind := "The cannibal of the house."
+	if wk.Kind == "renfield" {
+		kind = fmt.Sprintf("A Renfield, formerly a %s. Loyalty %.0f.", strings.ToLower(sim.VictimByID(wk.Victim).Name), wk.Loyalty)
+	}
+	return []sim.Line{
+		{Kind: "info", Text: kind},
+		{Kind: "food", Text: fmt.Sprintf("Hunger %.0f/100, energy %.0f/100.", wk.Hunger, wk.Energy)},
+		{Kind: "good", Text: "Doing: " + wk.JobLabel() + "."},
+		{Kind: "dim", Text: fmt.Sprintf("Carrying %d item(s).", len(wk.Carry))},
 	}
 }
 
-func (a *app) endPhase() {
-	if a.st.Phase == game.Night && a.st.Mission == nil && len(a.st.Prey) > 0 {
-		a.modal = confirm("Sleep through the night?",
-			fmt.Sprintf("Someone's out walking. Sleeping spends 1 banked day (%d left). [H] hunts instead.", a.st.Bank),
-			func(a *app) { a.do(game.Action{Kind: "end_phase"}) })
-		return
+func capitalize(s string) string {
+	if s == "" {
+		return s
 	}
-	a.do(game.Action{Kind: "end_phase"})
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-// tierColor picks the Heat meter color by tier.
-func tierColor(heat int) ui.Attr {
+func tierColor(heat float64) ui.Attr {
 	switch {
 	case heat >= 60:
 		return ui.Col("heat_hi")
@@ -230,14 +310,14 @@ func tierColor(heat int) ui.Attr {
 	return ui.Col("heat_low")
 }
 
-func hungerColor(h int) ui.Attr {
+func needColor(v float64) ui.Attr {
 	switch {
-	case h <= 25:
+	case v <= 25:
 		return ui.Col("heat_hi")
-	case h <= 50:
+	case v <= 50:
 		return ui.Col("heat_mid")
 	}
-	return ui.Col("hunger")
+	return ui.Col("heat_low")
 }
 
 func kindColor(kind string) ui.Attr {
@@ -246,11 +326,12 @@ func kindColor(kind string) ui.Attr {
 		return ui.Col("cash_ev")
 	case "dim":
 		return ui.Col("dim")
+	case "title":
+		return ui.Col("title")
 	}
 	return ui.Col(kind)
 }
 
-// wrap breaks s into lines no wider than w.
 func wrap(s string, w int) []string {
 	if w < 8 {
 		w = 8

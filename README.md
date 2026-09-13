@@ -1,8 +1,9 @@
 # Cannibal Casa
 
-A BBS door where you play a cannibal in the suburbs. Stay fed, stay unnoticed,
-upgrade the house. Roguelike-style text graphics in full color, multiplayer
-from day one: every player lives on the same cul-de-sac.
+A BBS door where you run a cannibal's house in the suburbs as a machine:
+lure the neighbors in, keep them in cells, butcher, cook, sell, and dispose of
+what's left before the street notices. A continuous simulation on a
+roguelike-style map, in full color, that keeps running when you log off.
 
 Runs on any board that serves a `DOOR32.SYS` dropfile (Synchronet, Mystic,
 ENiGMA½, Talisman, WWIV, ...) on Linux, Windows, macOS or FreeBSD. One static
@@ -10,30 +11,25 @@ binary, no runtime dependencies.
 
 ## The game
 
-- **Hunt** at night. The street rolls three passers-by: a solar salesman, a
-  tech bro, a pair of missionaries. Each archetype has marbling (meal quality),
-  fight (capture odds), and how long until someone notices they're gone.
-- **Livestock** waits in basement cells, fattening if fed. Butcher for cuts;
-  cuts spoil in days unless frozen.
-- **Cook** at the stove, smoker, sous vide, grinder, dehydrator, grill. Recipes
-  unlock with the gear: liver with fava beans and a nice Chianti, Mrs.
-  Lovett's meat pies, Long Pig Pulled Pork, bone broth, Paper Street soap.
-- **Evidence**: every meal leaves bones, clothes and a phone that keeps
-  pinging. Bury it, compost it, chip it, dissolve it, or simmer it into broth.
-- **Heat** climbs with loose evidence, noisy livestock and missing-person
-  reports, and cools with fences, curtains and dinner parties where the
-  neighbors eat the neighbors. Cross a tier and someone comes to the door:
-  the nosy neighbor, the HOA, Channel 6, a true-crime podcast, the FBI.
-- **Renfields**: The Chair brainwashes a captive into a helper who watches
-  the house while you're on a mission (the market, a Tinder date, a hunting
-  trip downtown, a Dexter-style clean-up job).
-- **Death is inheritance.** Get raided or starve and a relative inherits the
-  house: fixtures and recipes stay, cash halves, the freezer comes empty.
-- **The street**: a shared Nextdoor feed, a neighbor list, casseroles you can
-  send, and anonymous tips to the HOA about the house across the road.
+The house is a machine. Passers-by walk the sidewalk; a lure pulls one onto
+the porch and the welcome mat drops them into a free cell. Livestock eats and
+fattens. You and your Renfields butcher, carry cuts to the fridge, cook at the
+stove, smoker or sous vide, plate to the shelf, eat, sleep, stock the curb
+stand, and haul the bags out back to the chipper, the compost, the lye tub or
+a flower bed. Heat reads the jams: bags on the step, cars at the curb, hungry
+screaming from the basement. Cross a tier and someone comes to the door.
 
-Pacing: a caller may advance a few in-game days per real day (default 3),
-banked up to 9 for catch-up. Within a day, actions are free.
+It runs on one clock, at `time_scale` game minutes per real minute, whether
+you're watching or not. Log off for a day and the house runs two game months
+on your policy. Come back to full freezers or to sirens.
+
+You don't walk around. You move a cursor, look at things, build, switch
+machines on and off, and set policy: butcher at what marbling, keep how many
+meals on the shelf, which recipes go to the stand, whether The Chair turns
+guests into workers. Then you watch it run, in color, on a roguelike map.
+
+Death is inheritance: a raid or starvation ends this cannibal, and a relative
+takes the house with its fixtures, half the cash, and empty cells.
 
 ## Install (Synchronet)
 
@@ -71,29 +67,30 @@ token   = CHANGE_ME
 bbsname = my.bbs.example
 ```
 
-The server is authoritative: doors send actions, the server applies the
-rules. If the server is unreachable the door falls back to the local street
+The server owns the worlds and runs the simulation; doors sync the clock and
+send commands. If the server is unreachable the door falls back to the local street
 and says so.
 
 ## Keys
 
-Arrows or WASD move; walking onto a fixture uses it, walking onto an empty
-slot offers to build there. `Tab` changes floor. `T` passes the time. `B`
-build, `C` cook, `E` pantry, `F` fridge, `L` livestock, `X` evidence, `M`
-missions, `H` hunt, `P` dinner party, `N` the street, `O` options (256-color
-mode, rename), `?` help, `Q` quit.
+Arrows or WASD move the cursor; `Enter` looks at whatever is under it (a
+worker's job, a passer-by's odds, a machine's status and switch, a build
+offer on an empty slot). `Tab` changes floor. `Space` pauses while you're at
+the controls; `1` `2` `3` run at 1x, 2x, 4x. `B` build, `P` policy, `L`
+roster, `I` inventory, `N` the street, `O` options, `?` help, `Q` quit.
 
 ## Development
 
 ```sh
 go test ./...
-go run ./cmd/balancesim -runs 200 -days 60   # headless economy tuning
-go run ./cmd/balancesim -runs 1 -trace sweeney
-./cannibalcasa -snapshot -size 80x24          # one frame to stdout, UTF-8
+go run ./cmd/balancesim -runs 30 -days 60    # headless runs under a few build orders
+go run ./cmd/balancesim -runs 1 -days 10 -trace factory
+go run ./cmd/balancesim -runs 4 -deaths      # what killed each house
+./cannibalcasa -snapshot -size 80x24 -snapshot-days 5   # one frame to stdout, UTF-8
 ./cannibalcasa -local -utf8                   # play in a local terminal
 ```
 
-Layout: `internal/game` is the pure rules (no I/O), `internal/world` the
+Layout: `internal/sim` is the simulation (no I/O), `internal/world` the
 neighborhood store and local backend, `internal/proto` the JSON-lines wire
 format, `internal/ui` the color framebuffer and CP437 encoder, and the two
 `cmd/` binaries. See `docs/DESIGN.md` for the design decisions.

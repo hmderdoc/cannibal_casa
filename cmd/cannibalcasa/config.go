@@ -1,6 +1,6 @@
 // Config: cannibalcasa.ini next to the binary (seeded from
-// cannibalcasa.example.ini by install-xtrn). [settings] is pacing and display,
-// [server] is the optional cross-BBS neighborhood server.
+// cannibalcasa.example.ini by install-xtrn). [settings] is the clock and
+// display, [server] the optional cross-BBS neighborhood server.
 package main
 
 import (
@@ -10,12 +10,12 @@ import (
 	"strconv"
 	"strings"
 
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 )
 
 type config struct {
 	DataDir   string
-	Rules     game.Rules
+	Scale     int    // game minutes per real minute
 	ColorMode string // "16" | "256"
 	UTF8      bool
 	Server    string
@@ -45,7 +45,7 @@ func defaultDataDir() string {
 }
 
 func loadConfig(path string) config {
-	cfg := config{DataDir: defaultDataDir(), Rules: game.DefaultRules, ColorMode: "16", Port: "7710"}
+	cfg := config{DataDir: defaultDataDir(), Scale: sim.DefaultScale, ColorMode: "16", Port: "7710"}
 	f, err := os.Open(path)
 	if err != nil {
 		logf("config: %v (using defaults)", err)
@@ -75,13 +75,9 @@ func loadConfig(path string) config {
 		switch section + "." + k {
 		case "settings.data_dir":
 			cfg.DataDir = v
-		case "settings.days_per_day":
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				cfg.Rules.DaysPerDay = n
-			}
-		case "settings.day_bank_max":
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				cfg.Rules.BankMax = n
+		case "settings.time_scale":
+			if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1440 {
+				cfg.Scale = n
 			}
 		case "settings.color_mode":
 			if v == "256" {

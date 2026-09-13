@@ -1,8 +1,9 @@
-// Cannibal Casa - a BBS door (Synchronet/DOOR32) where you play a suburban
-// cannibal running a house: hunt the neighbors, cook them, hide the evidence,
-// upgrade the kitchen, brainwash the livestock, and keep the HOA off the
-// porch. Multiplayer: every player lives on one cul-de-sac, locally per BBS or
-// across boards through cannibalcasa-server.
+// Cannibal Casa - a BBS door (Synchronet/DOOR32) where the house is a machine
+// for processing the neighbors: lure them in, keep them in cells, butcher,
+// cook, sell, and dispose of what's left before the street notices. The
+// simulation runs on one clock whether you're watching or not. Multiplayer:
+// every player lives on one cul-de-sac, per BBS or across boards through
+// cannibalcasa-server.
 package main
 
 import (
@@ -14,10 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"cannibalcasa/internal/sim"
 	"cannibalcasa/internal/ui"
 )
 
-// version is stamped at release time via -ldflags "-X main.version=vX.Y.Z".
 var version = "dev"
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 	dropfile := "DOOR32.SYS"
 	forceLocal, utf8, snapshot := false, false, false
 	handleArg := ""
-	cols, rows := 0, 0
+	cols, rows, snapDays := 0, 0, 0
 	for i := 1; i < len(os.Args); i++ {
 		a := os.Args[i]
 		switch {
@@ -43,6 +44,9 @@ func main() {
 			utf8 = true
 		case a == "-snapshot":
 			snapshot = true
+		case a == "-snapshot-days" && i+1 < len(os.Args):
+			i++
+			snapDays, _ = strconv.Atoi(os.Args[i])
 		case a == "-size" && i+1 < len(os.Args):
 			i++
 			if c, r, ok := strings.Cut(os.Args[i], "x"); ok {
@@ -70,7 +74,7 @@ func main() {
 	}
 
 	if snapshot {
-		runSnapshot(cfg, bbs, handle, cols, rows)
+		runSnapshot(cfg, bbs, handle, cols, rows, snapDays)
 		return
 	}
 
@@ -97,7 +101,7 @@ func main() {
 	logf("terminal %dx%d bbs=%q handle=%q", cols, rows, bbs, handle)
 
 	w := bufio.NewWriterSize(term, 64*1024)
-	w.WriteString("\x1b[?25l\x1b[?7l") // cursor off, autowrap off
+	w.WriteString("\x1b[?25l\x1b[?7l")
 	defer func() { w.WriteString("\x1b[0m\x1b[?25h\x1b[?7h\x1b[2J\x1b[H"); w.Flush(); restore() }()
 
 	sig := make(chan os.Signal, 1)
@@ -115,11 +119,14 @@ func main() {
 	runSplash(w, buf, in, status)
 
 	a := newApp(be, bbs, handle, cfg, buf)
-	a.say("info", "%s", status)
+	a.note("info", "%s", status)
 	a.join()
+	defer be.Leave(bbs, handle)
 	buf.Invalidate()
 
-	resizeTick := time.NewTicker(2 * time.Second)
+	syncTick := time.NewTicker(1000 * time.Millisecond)
+	defer syncTick.Stop()
+	resizeTick := time.NewTicker(3 * time.Second)
 	defer resizeTick.Stop()
 	for !a.quit {
 		a.render()
@@ -128,6 +135,8 @@ func main() {
 		select {
 		case k := <-in.events:
 			a.handleKey(k)
+		case <-syncTick.C:
+			a.sync()
 		case <-in.quitCh:
 			logf("input closed; exiting")
 			return
@@ -147,9 +156,9 @@ func main() {
 	logf("clean exit")
 }
 
-// runSnapshot renders one frame of the main screen (and the splash) as UTF-8
-// ANSI to stdout, for eyeballing the layout without a terminal or a BBS.
-func runSnapshot(cfg config, bbs, handle string, cols, rows int) {
+// runSnapshot renders one frame of the main screen as UTF-8 ANSI to stdout,
+// after running the house for -snapshot-days, for eyeballing the layout.
+func runSnapshot(cfg config, bbs, handle string, cols, rows, days int) {
 	if cols == 0 {
 		cols, rows = 80, 24
 	}
@@ -158,8 +167,20 @@ func runSnapshot(cfg config, bbs, handle string, cols, rows int) {
 	be, status := pickBackend(cfg, bbs, handle, true)
 	defer be.Close()
 	a := newApp(be, bbs, handle, cfg, buf)
-	a.say("info", "%s", status)
+	a.note("info", "%s", status)
 	a.join()
+	a.modal = nil
+	if days > 0 && a.w != nil {
+		a.w.Cash = 2000
+		for _, id := range []string{"lure_couch", "cell_2", "grinder", "microwave", "compost", "fence", "chair", "cot", "smoker"} {
+			a.w.Build(id)
+		}
+		a.w.Policy.Brainwash = true
+		for d := 0; d < days; d++ {
+			a.w.Advance(1440)
+		}
+		a.w.Advance(sim.DefaultScale) // land at a random-ish minute
+	}
 	w := bufio.NewWriter(os.Stdout)
 	a.render()
 	buf.Flush(w)

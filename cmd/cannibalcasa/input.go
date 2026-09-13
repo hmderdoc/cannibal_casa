@@ -107,23 +107,30 @@ func (in *input) reader(t Term) {
 					continue
 				}
 				in.push(keyEsc)
+				if have {
+					in.plain(nb) // a lone Esc followed by a real key: don't swallow the key
+				}
 				continue
 			}
-			switch c {
-			case 3: // Ctrl-C
-				in.signalQuit()
-				return
-			case '\r', '\n':
-				in.push(keyEnter)
-			case '\t':
-				in.push(keyTab)
-			case 0x7f, 0x08:
-				in.push(keyBack)
-			default:
-				if c >= 0x20 && c < 0x7f {
-					in.push(key(rune(c)))
-				}
-			}
+			in.plain(c)
+		}
+	}
+}
+
+// plain decodes one non-escape byte into a key event.
+func (in *input) plain(c byte) {
+	switch c {
+	case 3: // Ctrl-C
+		in.signalQuit()
+	case '\r', '\n':
+		in.push(keyEnter)
+	case '\t':
+		in.push(keyTab)
+	case 0x7f, 0x08:
+		in.push(keyBack)
+	default:
+		if c >= 0x20 && c < 0x7f {
+			in.push(key(rune(c)))
 		}
 	}
 }

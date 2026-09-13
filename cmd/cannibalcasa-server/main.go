@@ -1,7 +1,6 @@
 // cannibalcasa-server: the neighborhood server. It owns the cul-de-sac (every
-// player's state, the feed, the mail) and applies the rules; doors on any BBS
-// connect out to it with a shared token and send actions. Run it yourself,
-// e.g. via a systemd unit; see cannibalcasa-server.service.
+// player's world, the feed, the mail) and runs the simulation; doors on any
+// BBS connect out with a shared token, sync the clock, and send commands.
 package main
 
 import (
@@ -14,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"cannibalcasa/internal/game"
 	"cannibalcasa/internal/proto"
+	"cannibalcasa/internal/sim"
 	"cannibalcasa/internal/world"
 )
 
@@ -25,8 +24,7 @@ func main() {
 	addr := flag.String("addr", ":7710", "listen address")
 	token := flag.String("token", "", "shared secret every door must present (required)")
 	dataDir := flag.String("data", "", "neighborhood data directory (default: SBBSDATA/cannibalcasa or ./data)")
-	daysPerDay := flag.Int("days-per-day", game.DefaultRules.DaysPerDay, "in-game days granted per real day")
-	bankMax := flag.Int("day-bank-max", game.DefaultRules.BankMax, "ceiling on banked days")
+	scale := flag.Int("time-scale", sim.DefaultScale, "game minutes per real minute")
 	flag.Parse()
 	if *token == "" {
 		fmt.Fprintln(os.Stderr, "cannibalcasa-server: -token is required")
@@ -40,12 +38,12 @@ func main() {
 			dir = "data"
 		}
 	}
-	w := world.NewLocal(dir, game.Rules{DaysPerDay: *daysPerDay, BankMax: *bankMax})
+	w := world.NewLocal(dir, *scale)
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("listen %s: %v", *addr, err)
 	}
-	log.Printf("cannibalcasa-server %s listening on %s, data in %s", version, *addr, dir)
+	log.Printf("cannibalcasa-server %s listening on %s, data in %s, scale %d", version, *addr, dir, *scale)
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -77,8 +75,12 @@ func serve(nc net.Conn, w *world.Local, token string) {
 	c.Write(proto.Response{OK: true, Server: version})
 	bbs, handle := strings.TrimSpace(hello.BBS), strings.TrimSpace(hello.Handle)
 	log.Printf("%s: %s@%s connected", nc.RemoteAddr(), handle, bbs)
+	defer func() {
+		w.Leave(bbs, handle)
+		log.Printf("%s: %s@%s left", nc.RemoteAddr(), handle, bbs)
+	}()
 	for {
-		nc.SetDeadline(time.Now().Add(30 * time.Minute)) // idle door sessions eventually free the slot
+		nc.SetDeadline(time.Now().Add(10 * time.Minute))
 		req, err := c.ReadRequest()
 		if err != nil {
 			return
@@ -86,20 +88,27 @@ func serve(nc net.Conn, w *world.Local, token string) {
 		var resp proto.Response
 		switch req.Type {
 		case proto.Join:
-			st, ev, err := w.Join(bbs, handle)
-			resp = wrap(err, st, nil, ev, nil)
+			st, ev, ticks, err := w.Join(bbs, handle)
+			resp = wrap(err, st)
+			resp.Events, resp.Ticks = ev, ticks
+		case proto.Sync:
+			st, err := w.Sync(bbs, handle, req.Speed)
+			resp = wrap(err, st)
 		case proto.Do:
-			st, r, err := w.Do(bbs, handle, req.Action)
-			resp = wrap(err, st, &r, nil, nil)
+			st, err := w.Do(bbs, handle, req.Command)
+			resp = wrap(err, st)
 		case proto.Hood:
 			h, err := w.Neighborhood(bbs, handle)
-			resp = wrap(err, nil, nil, nil, &h)
+			resp = wrap(err, nil)
+			if err == nil {
+				resp.Hood = &h
+			}
 		case proto.Casserole:
-			st, r, err := w.Casserole(bbs, handle, req.To, req.ID)
-			resp = wrap(err, st, &r, nil, nil)
+			st, err := w.Casserole(bbs, handle, req.To, req.ID)
+			resp = wrap(err, st)
 		case proto.Tip:
-			st, r, err := w.Tip(bbs, handle, req.To)
-			resp = wrap(err, st, &r, nil, nil)
+			st, err := w.Tip(bbs, handle, req.To)
+			resp = wrap(err, st)
 		case proto.Bye:
 			return
 		default:
@@ -111,9 +120,11 @@ func serve(nc net.Conn, w *world.Local, token string) {
 	}
 }
 
-func wrap(err error, st *game.State, r *game.Result, ev []game.Event, h *world.Neighborhood) proto.Response {
+// wrap turns a backend result into a response. A command error still carries
+// the world so the door can show the message without losing sync.
+func wrap(err error, st *sim.World) proto.Response {
 	if err != nil {
-		return proto.Response{Err: err.Error()}
+		return proto.Response{Err: err.Error(), World: st}
 	}
-	return proto.Response{OK: true, State: st, Result: r, Events: ev, Hood: h}
+	return proto.Response{OK: true, World: st}
 }

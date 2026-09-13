@@ -1,61 +1,114 @@
-// Rendering the main screen: the floor plan, the sidebar of meters, the
-// journal and the key footer. Everything goes through the ui.Buffer so only
-// changed cells hit the wire.
+// Rendering: the floor plan with everything moving on it, the sidebar of
+// meters and workers, the ticker, and the key footer.
 package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 	"cannibalcasa/internal/ui"
 )
 
 const (
-	mapW   = 48 // 46-wide plan + frame
-	mapH   = 14 // tallest plan (12 rows) + frame
-	minSbW = 30
+	mapW = 48 // 46-wide plan + frame
+	mapH = 16 // tallest plan (14 rows) + frame
 )
 
 func (a *app) render() {
 	b := a.buf
 	b.Clear(ui.Black)
-	if a.st == nil {
-		b.Print(2, 1, "No player state. Press Q.", ui.Col("bad"), ui.Black)
-		a.drawLog(0, 3, b.W, b.H-4)
+	if a.w == nil {
+		b.Print(2, 1, "No world. Press Q.", ui.Col("bad"), ui.Black)
+		a.drawTicker(0, 3, b.W, b.H-4)
 		return
 	}
 	a.drawMap(0, 0)
 	a.drawSidebar(mapW, 0, b.W-mapW, mapH)
-	a.drawLog(0, mapH, b.W, b.H-mapH-1)
+	a.drawTicker(0, mapH, b.W, b.H-mapH-1)
 	a.drawFooter(b.H - 1)
 	if a.modal != nil {
 		a.modal.draw(a, b)
 	}
 }
 
+// machineColor tints an owned fixture by what it's doing.
+func (a *app) machineColor(f *sim.Fixture) ui.Attr {
+	m := a.w.Machines[f.ID]
+	if m != nil && m.Off {
+		return ui.Col("dim")
+	}
+	switch f.Kind {
+	case sim.KindStation, sim.KindDisposal, sim.KindChair:
+		if m != nil && (m.Busy > 0 || m.Output != nil) {
+			return ui.Col("busy")
+		}
+	case sim.KindContainer:
+		switch f.ID {
+		case "back_step":
+			n := len(a.w.Pile)
+			switch {
+			case n == 0:
+				return ui.Col("dim")
+			case n >= 5:
+				return ui.Col("heat_hi")
+			}
+			return ui.Col("heat_mid")
+		case "fridge", "fridge_big":
+			fresh, _ := fridgeUsed(a.w)
+			if fresh >= a.w.FridgeCap() {
+				return ui.Col("full")
+			}
+		case "pantry", "pantry_big":
+			if len(a.w.Pantry) >= a.w.PantryCap() {
+				return ui.Col("full")
+			}
+		}
+	case sim.KindStand:
+		if len(a.w.Stand) > 0 {
+			return ui.Col("busy")
+		}
+	}
+	return ui.Col(f.Color)
+}
+
+func fridgeUsed(w *sim.World) (fresh, frozen int) {
+	for _, c := range w.Fridge {
+		if c.Frozen {
+			frozen++
+		} else {
+			fresh++
+		}
+	}
+	return
+}
+
 func (a *app) drawMap(ox, oy int) {
 	b := a.buf
+	w := a.w
 	p := a.plan()
 	border := ui.Col("border")
 	b.Box(ox, oy, mapW, mapH, border, ui.Black, "", ui.Black)
-	title := fmt.Sprintf(" CANNIBAL CASA ─ %s ", strings.ToUpper(a.level.String()))
-	b.Print(ox+2, oy, title, ui.Col("title"), ui.Black)
+	b.Print(ox+2, oy, fmt.Sprintf(" CANNIBAL CASA ─ %s ", strings.ToUpper(a.level.String())), ui.Col("title"), ui.Black)
 	b.Print(ox+mapW-14, oy, " Tab: floor ", ui.Col("dim"), ui.Black)
 
 	wallCol, floorCol, floorCh := ui.Col("wall"), ui.Col("floor_ground"), '·'
 	switch a.level {
-	case game.Basement:
+	case sim.Basement:
 		wallCol, floorCol = ui.Col("wall_basement"), ui.Col("floor_basement")
-	case game.Backyard:
+	case sim.Backyard:
 		wallCol, floorCol, floorCh = ui.Col("wall_yard"), ui.Col("floor_yard"), ','
-	case game.Attic:
+		if w.Has("fence") {
+			wallCol = ui.Col("fix_yard")
+		}
+	case sim.Attic:
 		wallCol, floorCol = ui.Col("wall_attic"), ui.Col("floor_attic")
 	}
 	isWall := func(x, y int) bool {
 		return y >= 0 && y < len(p.Rows) && x >= 0 && x < len(p.Rows[y]) && p.Rows[y][x] == '#'
 	}
-	cells := a.cellOccupants()
+	occupants := a.cellOccupants()
 	for y, row := range p.Rows {
 		for x := 0; x < len(row); x++ {
 			sx, sy := ox+1+x, oy+1+y
@@ -63,7 +116,7 @@ func (a *app) drawMap(ox, oy int) {
 			case '#':
 				if isWall(x, y-1) && isWall(x+1, y) && isWall(x, y+1) && isWall(x-1, y) &&
 					isWall(x-1, y-1) && isWall(x+1, y-1) && isWall(x-1, y+1) && isWall(x+1, y+1) {
-					b.Set(sx, sy, '▒', wallCol, ui.Black) // solid interior
+					b.Set(sx, sy, '▒', wallCol, ui.Black)
 					continue
 				}
 				b.Set(sx, sy, ui.WallGlyph(isWall(x, y-1), isWall(x+1, y), isWall(x, y+1), isWall(x-1, y)), wallCol, ui.Black)
@@ -71,16 +124,27 @@ func (a *app) drawMap(ox, oy int) {
 				b.Set(sx, sy, floorCh, floorCol, ui.Black)
 			case '+':
 				b.Set(sx, sy, '+', ui.Col("door"), ui.Black)
+			case '=':
+				b.Set(sx, sy, '═', ui.Col("street"), ui.Black)
+			case '-':
+				b.Set(sx, sy, '─', ui.Col("sidewalk"), ui.Black)
+			case '>':
+				b.Set(sx, sy, '>', ui.Col("door"), ui.Black)
+			case '<':
+				b.Set(sx, sy, '<', ui.Col("door"), ui.Black)
 			default:
-				f := game.FixtureAtSlot(a.level, ch)
-				if f == nil {
+				var owned *sim.Fixture
+				for _, f := range sim.FixturesAtSlot(a.level, ch) {
+					if w.Has(f.ID) {
+						owned = f
+					}
+				}
+				if owned == nil {
 					b.Set(sx, sy, '?', ui.Col("slot_empty"), ui.Black)
-				} else if !a.st.Has(f.ID) {
-					b.Set(sx, sy, '?', ui.Col("slot_empty"), ui.Black)
-				} else if v, ok := cells[f.ID]; ok {
-					b.Set(sx, sy, v.Glyph, ui.Col(v.Color), ui.Black)
+				} else if v, ok := occupants[owned.ID]; ok {
+					b.Set(sx, sy, v.glyph, v.color, ui.Black)
 				} else {
-					b.Set(sx, sy, f.Glyph, ui.Col(f.Color), ui.Black)
+					b.Set(sx, sy, owned.Glyph, a.machineColor(owned), ui.Black)
 				}
 			}
 		}
@@ -88,141 +152,223 @@ func (a *app) drawMap(ox, oy int) {
 	for _, r := range p.Rooms {
 		for i, ch := range r.Name {
 			x, y := r.X+i, r.Y
-			if y < len(p.Rows) && x < len(p.Rows[y]) && p.Rows[y][x] == '.' {
+			if p.At(x, y) == '.' {
 				b.Set(ox+1+x, oy+1+y, ch, ui.Col("label"), ui.Black)
 			}
 		}
 	}
-	// Renfields loiter in the hall on the ground floor.
-	if a.level == game.Ground {
-		n := 0
-		for _, c := range a.st.Captives {
-			if c.Renfield && n < 2 {
-				b.Set(ox+1+40+n*2, oy+1+9, 'r', ui.Col("fix_closet"), ui.Black)
-				n++
+	// Cars at the curb.
+	if a.level == sim.Ground {
+		for i := range w.Driveway {
+			if i > 3 {
+				break
 			}
+			b.Set(ox+1+sim.DrivewayX+i*2, oy+1+sim.StreetY, 'c', ui.Col("heat_hi"), ui.Black)
 		}
 	}
-	b.Set(ox+1+a.px, oy+1+a.py, '@', ui.Col("player"), ui.Black)
-}
-
-// cellOccupants maps cell fixture ids to the victim in them, in roster order.
-func (a *app) cellOccupants() map[string]*game.Victim {
-	out := map[string]*game.Victim{}
-	cells := []string{"cell_1", "cell_2", "cell_3", "cell_4", "cell_5"}
-	i := 0
-	for _, c := range a.st.Captives {
-		if c.Renfield {
+	// Entities: passers-by, visitors, workers.
+	for _, ps := range w.Passers {
+		if ps.Pos.L != a.level {
 			continue
 		}
-		for i < len(cells) && !a.st.Has(cells[i]) {
-			i++
+		v := sim.VictimByID(ps.Victim)
+		col := ui.Col(v.Color)
+		if ps.State == "lured" {
+			col = ui.Col("bright")
+		} else if ps.State == "flee" {
+			col = ui.Col("heat_hi")
 		}
-		if i >= len(cells) {
-			break
+		b.Set(ox+1+ps.Pos.X, oy+1+ps.Pos.Y, v.Glyph, col, ui.Black)
+	}
+	for _, vs := range w.Visitors {
+		if vs.Pos.L != a.level {
+			continue
 		}
-		out[cells[i]] = game.VictimByID(c.Victim)
-		i++
+		g, col := 'I', ui.Col("victim_heat")
+		switch vs.Kind {
+		case "dog":
+			g, col = 'D', ui.Col("door")
+		case "police":
+			g, col = 'P', ui.Col("fix_cell")
+		}
+		b.Set(ox+1+vs.Pos.X, oy+1+vs.Pos.Y, g, col, ui.Black)
+	}
+	for _, wk := range w.Workers {
+		if wk.Pos.L != a.level {
+			continue
+		}
+		g, col := '@', ui.Col("player")
+		if wk.Kind == "renfield" {
+			g, col = 'r', ui.Col("fix_closet")
+		}
+		if wk.Asleep {
+			col = ui.Col("dim")
+		}
+		b.Set(ox+1+wk.Pos.X, oy+1+wk.Pos.Y, g, col, ui.Black)
+	}
+	// Cursor: invert the cell.
+	c := b.Get(ox+1+a.cx, oy+1+a.cy)
+	b.Set(ox+1+a.cx, oy+1+a.cy, c.Ch, ui.Black, ui.Col("cursor"))
+}
+
+type occupant struct {
+	glyph rune
+	color ui.Attr
+}
+
+func (a *app) cellOccupants() map[string]occupant {
+	out := map[string]occupant{}
+	for _, l := range a.w.Livestock {
+		if l.Cell == "" {
+			continue
+		}
+		v := sim.VictimByID(l.Victim)
+		col := ui.Col(v.Color)
+		if l.Hunger > 50 {
+			col = ui.Col("heat_hi")
+		}
+		out[l.Cell] = occupant{v.Glyph, col}
+	}
+	if m := a.w.Machines["chair"]; m != nil && m.Load != 0 {
+		out["chair"] = occupant{'&', ui.Col("busy")}
 	}
 	return out
 }
 
 func (a *app) drawSidebar(ox, oy, w, h int) {
 	b := a.buf
-	s := a.st
+	s := a.w
 	if w < 20 {
 		return
 	}
 	b.Box(ox, oy, w, h, ui.Col("border"), ui.Black, "", ui.Black)
 	x, y := ox+2, oy+1
-	iw := w - 4 // inner width
+	iw := w - 4
 	name := s.Cannibal
 	if !s.Alive {
 		name += " (deceased)"
 	}
-	b.PrintN(x, y, trunc(name, iw), iw, ui.Col("bright"), ui.Black)
+	b.PrintN(x, y, trunc(fmt.Sprintf("%s  gen %d", name, s.Generation), iw), iw, ui.Col("bright"), ui.Black)
 	y++
-	b.PrintN(x, y, fmt.Sprintf("Gen %d  Day %d  %s", s.Generation, s.Day, s.Phase), iw, ui.Col("text"), ui.Black)
-	y++
-	bankCol := ui.Col("dim")
-	if s.Bank == 0 {
-		bankCol = ui.Col("warn")
+	speed := fmt.Sprintf("%dx", a.speed)
+	speedCol := ui.Col("good")
+	if a.speed == 0 {
+		speed, speedCol = "PAUSED", ui.Col("warn")
 	}
-	b.PrintN(x, y, fmt.Sprintf("Days banked: %d", s.Bank), iw, bankCol, ui.Black)
+	b.PrintN(x, y, s.TimeString(), iw, ui.Col("text"), ui.Black)
+	b.Print(x+iw-len(speed), y, speed, speedCol, ui.Black)
+	y++
+	b.Print(x, y, fmt.Sprintf("Cash $%.0f", s.Cash), ui.Col("cash"), ui.Black)
+	b.Print(x+iw/2, y, fmt.Sprintf("Stars %d", s.Stars), ui.Col("stars"), ui.Black)
 	y++
 	barW := iw - 11
-	if barW < 6 {
-		barW = 6
-	}
-	b.Print(x, y, "Hunger", ui.Col("text"), ui.Black)
-	b.Bar(x+7, y, barW, s.Hunger, 100, hungerColor(s.Hunger), ui.Col("bar_off"), ui.Black)
-	b.Print(x+8+barW, y, fmt.Sprintf("%3d", s.Hunger), hungerColor(s.Hunger), ui.Black)
-	y++
 	heat := s.Heat
 	if heat > 100 {
 		heat = 100
 	}
 	b.Print(x, y, "Heat  ", ui.Col("text"), ui.Black)
-	b.Bar(x+7, y, barW, heat, 100, tierColor(heat), ui.Col("bar_off"), ui.Black)
-	b.Print(x+8+barW, y, fmt.Sprintf("%3d", heat), tierColor(heat), ui.Black)
+	b.Bar(x+7, y, barW, int(heat), 100, tierColor(heat), ui.Col("bar_off"), ui.Black)
+	b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", heat), tierColor(heat), ui.Black)
 	y++
-	b.PrintN(x+7, y, game.TierName(s.Tier()), iw-7, tierColor(heat), ui.Black)
+	b.PrintN(x+7, y, sim.TierName(s.Tier()), iw-7, tierColor(heat), ui.Black)
 	y++
-	b.Print(x, y, fmt.Sprintf("Cash $%d", s.Cash), ui.Col("cash"), ui.Black)
-	b.Print(x+iw/2, y, fmt.Sprintf("Stars %d", s.Stars), ui.Col("stars"), ui.Black)
+	if p := s.Player(); p != nil {
+		b.Print(x, y, "Hunger", ui.Col("text"), ui.Black)
+		b.Bar(x+7, y, barW, int(p.Hunger), 100, needColor(p.Hunger), ui.Col("bar_off"), ui.Black)
+		b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", p.Hunger), needColor(p.Hunger), ui.Black)
+		y++
+		b.Print(x, y, "Energy", ui.Col("text"), ui.Black)
+		b.Bar(x+7, y, barW, int(p.Energy), 100, needColor(p.Energy), ui.Col("bar_off"), ui.Black)
+		b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", p.Energy), needColor(p.Energy), ui.Black)
+		y++
+	}
+	fresh, frozen := fridgeUsed(s)
+	b.PrintN(x, y, fmt.Sprintf("Cells %d/%d  Fridge %d/%d +%d", len(s.Livestock), len(s.Cells()), fresh, s.FridgeCap(), frozen), iw, ui.Col("food"), ui.Black)
 	y++
-	fresh, frozen := 0, 0
-	for _, c := range s.Fridge {
-		if c.Frozen {
-			frozen++
-		} else {
-			fresh++
+	b.PrintN(x, y, fmt.Sprintf("Shelf %d/%d  Stand %d/%d", len(s.Pantry), s.PantryCap(), len(s.Stand), s.StandCap()), iw, ui.Col("food"), ui.Black)
+	y++
+	pileCol := ui.Col("dim")
+	if len(s.Pile) > 0 || len(s.Driveway) > 0 {
+		pileCol = ui.Col("heat")
+	}
+	b.PrintN(x, y, fmt.Sprintf("Step %d  Cars %d  Buried %d/%d", len(s.Pile), len(s.Driveway), s.Buried, s.PlotCap()), iw, pileCol, ui.Black)
+	y++
+	for _, wk := range s.Workers {
+		if y >= oy+h-2 {
+			break
+		}
+		g := "@"
+		col := ui.Col("player")
+		if wk.Kind == "renfield" {
+			g, col = "r", ui.Col("fix_closet")
+		}
+		b.PrintN(x, y, trunc(fmt.Sprintf("%s %s: %s", g, firstName(wk.Name), wk.JobLabel()), iw), iw, col, ui.Black)
+		y++
+	}
+	alert := ""
+	alertCol := ui.Col("warn")
+	for _, vs := range s.Visitors {
+		switch vs.Kind {
+		case "police":
+			alert, alertCol = "THE FBI IS HERE", ui.Col("bad")
+		case "inspector":
+			if alert == "" {
+				alert = "VISITOR AT THE DOOR"
+			}
+		case "dog":
+			if alert == "" {
+				alert = "dog in the yard"
+			}
 		}
 	}
-	b.PrintN(x, y, fmt.Sprintf("Fridge %d/%d  Frz %d/%d  Meals %d", fresh, s.FridgeCap(), frozen, s.FreezerCap(), len(s.Dishes)), iw, ui.Col("food"), ui.Black)
-	y++
-	b.PrintN(x, y, fmt.Sprintf("Livestock %d/%d  Renfields %d", s.Livestock(), s.CellCount(), s.Renfields()), iw, ui.Col("fix_cell"), ui.Black)
-	y++
-	ev := len(s.Evidence) - s.Buried()
-	evCol := ui.Col("dim")
-	if ev > 0 {
-		evCol = ui.Col("heat")
+	if alert == "" {
+		for _, ps := range s.Passers {
+			if ps.State == "lured" {
+				alert, alertCol = "someone's on the porch...", ui.Col("good")
+			}
+		}
 	}
-	b.PrintN(x, y, fmt.Sprintf("Evidence %d loose, %d buried", ev, s.Buried()), iw, evCol, ui.Black)
-	y++
-	switch {
-	case s.Mission != nil:
-		m := game.MissionByID(s.Mission.ID)
-		b.PrintN(x, y, trunc(fmt.Sprintf("Away: %s (%d)", m.Name, s.Mission.Phases), iw), iw, ui.Col("warn"), ui.Black)
-	case s.Inspection != nil:
-		b.PrintN(x, y, trunc(fmt.Sprintf("VISITOR in %d phase(s)!", s.Inspection.Phases), iw), iw, ui.Col("bad"), ui.Black)
-	case s.Phase == game.Night && len(s.Prey) > 0:
-		b.PrintN(x, y, fmt.Sprintf("%d out walking. [H]unt", len(s.Prey)), iw, ui.Col("good"), ui.Black)
-	default:
-		b.PrintN(x, y, "[T] to pass the time", iw, ui.Col("dim"), ui.Black)
-	}
-	y++
-	if y < oy+h-1 {
-		b.PrintN(x, y, fmt.Sprintf("Dynasty stars: %d (gen %d)", s.DynastyStars(), s.Generation), iw, ui.Col("dim"), ui.Black)
+	if alert != "" && y < oy+h-1 {
+		b.PrintN(x, y, alert, iw, alertCol, ui.Black)
 	}
 }
 
-func (a *app) drawLog(ox, oy, w, h int) {
+func firstName(s string) string {
+	parts := strings.Fields(s)
+	if len(parts) == 0 {
+		return s
+	}
+	return parts[len(parts)-1]
+}
+
+// drawTicker shows the newest journal lines, world ticker and door notes
+// merged, oldest at the top.
+func (a *app) drawTicker(ox, oy, w, h int) {
 	b := a.buf
 	if h < 3 {
 		return
 	}
 	b.Box(ox, oy, w, h, ui.Col("border"), ui.Black, "Journal", ui.Col("dim"))
-	lines := make([]game.Event, 0, h)
-	// Walk backwards, wrapping, until the box is full.
-	for i := len(a.log) - 1; i >= 0 && len(lines) < h-2; i-- {
-		ws := wrap(a.log[i].Text, w-4)
-		for j := len(ws) - 1; j >= 0 && len(lines) < h-2; j-- {
-			lines = append(lines, game.Event{Kind: a.log[i].Kind, Text: ws[j]})
+	var lines []sim.Line
+	if a.w != nil {
+		lines = append(lines, a.w.Ticker...)
+	}
+	lines = append(lines, a.notes...)
+	sort.SliceStable(lines, func(i, j int) bool { return lines[i].Tick < lines[j].Tick })
+	var rows []sim.Line
+	for i := len(lines) - 1; i >= 0 && len(rows) < h-2; i-- {
+		stamp := fmt.Sprintf("d%d %02d:%02d ", lines[i].Tick/1440+1, lines[i].Tick%1440/60, lines[i].Tick%60)
+		ws := wrap(lines[i].Text, w-4-len(stamp))
+		for j := len(ws) - 1; j >= 0 && len(rows) < h-2; j-- {
+			pre := strings.Repeat(" ", len(stamp))
+			if j == 0 {
+				pre = stamp
+			}
+			rows = append(rows, sim.Line{Kind: lines[i].Kind, Text: pre + ws[j]})
 		}
 	}
 	y := oy + h - 2
-	for _, l := range lines {
+	for _, l := range rows {
 		b.PrintN(ox+2, y, l.Text, w-4, kindColor(l.Kind), ui.Black)
 		y--
 	}
@@ -231,8 +377,8 @@ func (a *app) drawLog(ox, oy, w, h int) {
 func (a *app) drawFooter(y int) {
 	b := a.buf
 	keys := []struct{ k, v string }{
-		{"Tab", "floor"}, {"T", "next"}, {"B", "build"}, {"C", "cook"}, {"E", "eat"},
-		{"L", "stock"}, {"X", "evid"}, {"M", "jobs"}, {"N", "street"}, {"?", "help"},
+		{"Spc", "pause"}, {"Tab", "floor"}, {"B", "build"}, {"P", "policy"},
+		{"L", "roster"}, {"I", "stock"}, {"N", "street"}, {"?", "help"},
 	}
 	x := 1
 	for i, kv := range keys {

@@ -1,108 +1,83 @@
 # Cannibal Casa - design
 
-A BBS door (Go, DOOR32.SYS, portable binaries) where you play a cannibal
-living in the suburbs. Feed yourself, expand the house, hide the evidence,
-keep the HOA off your porch. Roguelike-style text graphics, always in color.
+A BBS door (Go, DOOR32.SYS, portable binaries) where the house is a machine
+for processing the neighbors. You don't play a hero walking around; you build
+and tune a factory and watch it run on a roguelike-style map, in color.
 
 ## Decisions (locked)
 
-1. **Pacing.** A caller may advance a few in-game days per real day (config
-   `days_per_day`, default 3); unspent days bank up to `day_bank_max` so a
-   caller who skips a weekend can catch up. Within a day, actions are free.
-2. **Death is inheritance.** When a cannibal is caught (Heat hits 100) or
-   starves, a relative inherits the house. Fixtures and recipes persist, cash
-   is halved, livestock and evidence are lost, Heat resets low. The dynasty's
-   past cannibals live on in the hall of fame.
-3. **Content line.** Adults only, every one of them annoying. Raunchy and
-   risque humor is fine; gore is implied through puns and cooking talk, never
-   described. Never children, never sexual violence.
-4. **Multiplayer from the start.** Every player lives on the same cul-de-sac.
-   A neighborhood server shares one street across boards; without a server the
-   door runs a local neighborhood shared by every node on the BBS. Same code
-   path either way (a `Backend` interface).
-5. **Name.** "Cannibal Casa" everywhere. Never "Casa de Cannibal".
-6. **Color is required.** Every cell carries fg/bg. A semantic palette
-   (`meat_fresh`, `heat_high`, `cash`, ...) resolves to 16-color by default
-   and 256-color on request. Sysops can retint via `[colors]` later.
+1. **One clock.** Game time advances at `time_scale` game minutes per real
+   minute (default 60), whether or not anyone is connected. Being away is
+   just elapsed time the simulation catches up on. There is no separate
+   offline rate: what bounds the house while you're gone is the house.
+2. **Resource-driven.** Every flow has a real constraint: intake needs a free
+   cell and a lure, holding costs feed per head per day, processing needs a
+   worker and an idle station, storage has capacity, disposal has throughput,
+   appliances draw power. A well-designed house reaches a steady state; a
+   badly designed one jams, gets loud, and gets raided while you're out.
+3. **Death is inheritance.** A raid or starvation ends this cannibal; a
+   relative inherits the house with its fixtures, half the cash, and empty
+   cells.
+4. **Content line.** Adults only, every one of them annoying. Raunchy humor
+   is fine; gore is implied through cooking talk, never described.
+5. **Multiplayer plumbing from the start**, fiction still open. Every player
+   has a house on a shared street with a feed, casseroles and anonymous tips.
+   Local per BBS through the data directory, or across boards through
+   `cannibalcasa-server`. What the street *means* is not yet decided.
+6. **Name.** "Cannibal Casa" everywhere. Never "Casa de Cannibal".
+7. **Color is required.** Semantic palette, 16-color default, 256 on request.
 
-## Core loop
+## The machine
 
-Each in-game day has four phases: Morning, Afternoon, Evening, Night. Day
-phases are for cooking, building, selling, disposal. Night is for hunting.
-Ending Night rolls the day: hunger drops, meat decays, livestock eat, Renfield
-loyalty drifts, evidence radiates Heat, the neighborhood rolls events.
+- **Sidewalk.** Passers-by walk past every few minutes (more by day, joggers
+  at night). At the gate a lure may pull one onto the porch; the welcome mat
+  fires when a cell is free. Success drops them down the chute; failure
+  sometimes screams (Heat). Drivers leave a car at the curb.
+- **Cells.** Livestock eats ($4/day, $2 with the gruel dispenser) and fattens
+  toward marbling 5. Hungry livestock screams, stops fattening, tries the
+  door, and dies after a day at zero.
+- **Workers.** The cannibal and any Renfields pick jobs by priority: eat,
+  sleep, feed, plate finished dishes, dispose of bags, butcher (per policy),
+  cook (food to a shelf target, then sellable recipes), stock the stand,
+  brainwash. Each job is a list of walk-here/work-this-long/then-do steps and
+  survives a save mid-step.
+- **Stations** cook one recipe at a time for its duration (10 minutes for
+  tartare, 14 hours for pulled pork); the dish waits until someone plates it.
+- **Evidence.** Butchering leaves bones, clothes and a phone on the back step.
+  Disposal machines each take one bag for their duration (chipper 5 minutes
+  and loud, compost a day and silent, lye 12 hours). Plots hold a few. The
+  stockpot turns bones into broth you can sell.
+- **Heat** accrues hourly from loose bags, cars, hungry screaming, running
+  smokers; cools hourly, faster with a fence and curtains and when nothing is
+  visible. Missing-person reports land one-off after each victim's notice
+  period. Crossing a tier sends a visitor to the front door who scores what's
+  visible (cars, bags without a fence, screams without soundproofing). 100 is
+  the raid.
+- **Cash.** The curb stand sells one marked item an hour, nine to six. The
+  garden, an Airbnb listing and Etsy soap pay daily. Utilities drain hourly.
 
-Meters:
+## The door
 
-| Meter    | Range | Drives                                                   |
-|----------|-------|----------------------------------------------------------|
-| Hunger   | 0-100 | 0 = starving. Meals restore; fresh cuts restore more.    |
-| Heat     | 0-100 | Suspicion. Antagonist ladder by tier. 100 = the raid.    |
-| Cash     | $     | Upgrades. Earned by selling dishes, candles, tomatoes.   |
-| Stars    | count | Score. Earned by serving quality dishes.                 |
-
-## The house
-
-Four levels, each a fixed floor plan with fixture slots:
-
-- **Ground.** Kitchen (stove, fridge, freezer, grinder, smoker, sous vide,
-  dehydrator), Living room (dinner parties), the Closet (brainwashing chair),
-  Garage (van, chest freezer, wood chipper), Porch (lures).
-- **Basement.** Cells = livestock capacity. Dig to expand. Soundproofing.
-- **Backyard.** Burial plots, compost, garden beds, shed, pool, tall fence.
-- **Attic.** Surveillance (mission safety), drying racks (jerky).
-
-## Victims
-
-Archetypes with marbling (meal quality), fight (capture difficulty),
-notice (days until someone misses them) and heat-when-missing. Solar salesman,
-HOA inspector, MLM hun, influencer, crossfit guy, missionaries (pairs), tech
-bro, vegan, jogger, delivery driver, true-crime podcaster (late game).
-
-## Recipes
-
-Gated by fixtures and cut freshness. Liver with fava beans and a nice Chianti,
-long-pig pulled pork, meat pies (the sellable), Farmer Vincent fritters,
-Soylent smoothie, jerky, bone broth (food AND evidence disposal), tallow
-candles (Etsy money), charcuterie board (prestige).
-
-## Evidence
-
-Meals leave bones, clothes, phones, and cars. Each undisposed item radiates
-Heat daily. Disposal: bury (dog risk), chipper (noise), lye bath (floor risk),
-bone broth (elegant), compost (tomatoes!). Phones ping until microwaved.
-
-## Missions
-
-Leave the house for a few phases: farmers market, city hunt, Tinder date,
-burglary, vigilante job. While away, escape and dig rolls run against
-Renfield loyalty and security fixtures.
-
-## Antagonist ladder (Heat tiers)
-
-Nosy neighbor -> HOA -> local news -> true-crime podcast -> detective -> FBI.
-Crossing a tier schedules an inspection: one phase of warning, then a visible
-evidence check.
-
-## Neighborhood (multiplayer)
-
-- Shared **Nextdoor feed** of every player's notable events.
-- **Neighbor list** with cannibal name, generation, stars, days, heat tier.
-- **Casserole**: send a dish to a neighbor (feeds them, costs you a dish).
-- **Anonymous tip**: raise a neighbor's Heat; may backfire onto you.
+Cursor over the map; Enter looks at whatever is there (a worker's job, a
+passer-by's odds, a machine's status with an on/off switch, a build offer on
+an empty slot). Space pauses while you're at the controls; 1/2/3 run 1x/2x/4x.
+Menus pause the clock; reading panels don't. B builds, P tunes policy, L is
+the roster, I the inventory, N the street. On login a digest shows what the
+house did while you were gone.
 
 ## Architecture
 
 ```
 cmd/cannibalcasa/          door client (term I/O, input, render, screens)
-cmd/cannibalcasa-server/   neighborhood server (authoritative, token-gated)
-cmd/balancesim/            headless economy sim for tuning
-internal/game/             pure rules: state, data tables, actions, day tick
+cmd/cannibalcasa-server/   neighborhood server (token-gated, owns the worlds)
+cmd/balancesim/            headless runs under a few build orders
+internal/sim/              the simulation: data, map, state, jobs, tick, commands
 internal/world/            neighborhood store (players, feed, mail) + local backend
 internal/proto/            JSON-lines wire protocol
 internal/ui/               cell framebuffer, palette, CP437, widgets
 ```
 
-The door never runs rules on its own in remote mode: it sends Actions, the
-server applies `game.Apply` and returns state. Local mode calls the same
-function in-process against a file store in the data directory.
+The door calls `Sync(speed)` about once a second; the backend advances the
+world by the wall-clock elapsed at scale times speed and returns it. Commands
+(build, toggle, policy, rename, inherit) are the only way the door changes the
+world. Local and remote backends run identical code.

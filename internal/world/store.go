@@ -9,13 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 )
 
 // Store is the on-disk neighborhood: one JSON per player, an append-only feed
-// and an append-only mailbox per player, all under one directory. Appends are
-// single writes with O_APPEND so nodes on one BBS can share the directory
-// without a lock; a player's own file is only ever written by their session.
+// and an append-only mailbox per player, all under one directory.
 type Store struct {
 	Dir string
 }
@@ -48,14 +46,11 @@ func (st *Store) playerPath(key string) string {
 	return filepath.Join(st.Dir, "players", safe(bbs)+"__"+safe(handle)+".json")
 }
 
-func (st *Store) mailPath(key string) string {
-	return st.playerPath(key) + ".mail"
-}
+func (st *Store) mailPath(key string) string { return st.playerPath(key) + ".mail" }
+func (st *Store) feedPath() string           { return filepath.Join(st.Dir, "feed.jsonl") }
 
-func (st *Store) feedPath() string { return filepath.Join(st.Dir, "feed.jsonl") }
-
-// Load returns the player's state, or nil when they've never played.
-func (st *Store) Load(key string) (*game.State, error) {
+// Load returns the player's world, or nil when they've never played.
+func (st *Store) Load(key string) (*sim.World, error) {
 	data, err := os.ReadFile(st.playerPath(key))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -63,26 +58,35 @@ func (st *Store) Load(key string) (*game.State, error) {
 	if err != nil {
 		return nil, err
 	}
-	var s game.State
-	if err := json.Unmarshal(data, &s); err != nil {
+	var w sim.World
+	if err := json.Unmarshal(data, &w); err != nil {
 		return nil, err
 	}
-	if s.Fixtures == nil {
-		s.Fixtures = map[string]bool{}
+	if w.Version < 2 {
+		return nil, nil // a save from the phase-based prototype: start over
 	}
-	if s.Recipes == nil {
-		s.Recipes = map[string]bool{}
+	if w.Fixtures == nil {
+		w.Fixtures = map[string]bool{}
 	}
-	return &s, nil
+	if w.Machines == nil {
+		w.Machines = map[string]*sim.Machine{}
+	}
+	if w.Policy.Sell == nil {
+		w.Policy.Sell = map[string]bool{}
+	}
+	if w.Scale <= 0 {
+		w.Scale = sim.DefaultScale
+	}
+	return &w, nil
 }
 
-// Save writes the state atomically (temp file + rename).
-func (st *Store) Save(key string, s *game.State) error {
+// Save writes the world atomically (temp file + rename).
+func (st *Store) Save(key string, w *sim.World) error {
 	p := st.playerPath(key)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(s, "", " ")
+	data, err := json.Marshal(w)
 	if err != nil {
 		return err
 	}
@@ -93,7 +97,7 @@ func (st *Store) Save(key string, s *game.State) error {
 	return os.Rename(tmp, p)
 }
 
-// All lists every player on the street, plus the key each file belongs to.
+// All lists every player on the street.
 func (st *Store) All() ([]Neighbor, error) {
 	entries, err := os.ReadDir(filepath.Join(st.Dir, "players"))
 	if errors.Is(err, os.ErrNotExist) {
@@ -111,11 +115,11 @@ func (st *Store) All() ([]Neighbor, error) {
 		if err != nil {
 			continue
 		}
-		var s game.State
-		if json.Unmarshal(data, &s) != nil || s.Handle == "" {
+		var w sim.World
+		if json.Unmarshal(data, &w) != nil || w.Handle == "" || w.Version < 2 {
 			continue
 		}
-		out = append(out, Neighbor{Key: Key(s.BBS, s.Handle), Summary: s.Summary()})
+		out = append(out, Neighbor{Key: Key(w.BBS, w.Handle), Summary: w.Summary()})
 	}
 	return out, nil
 }
@@ -137,7 +141,6 @@ func appendLine(path string, v any) error {
 	return err
 }
 
-// Post adds a line to the neighborhood feed.
 func (st *Store) Post(e FeedEntry) error {
 	if e.Time == 0 {
 		e.Time = time.Now().Unix()
@@ -170,7 +173,6 @@ func (st *Store) Feed(n int) ([]FeedEntry, error) {
 	return all, nil
 }
 
-// SendMail drops mail on a neighbor's porch.
 func (st *Store) SendMail(toKey string, m Mail) error {
 	if m.Time == 0 {
 		m.Time = time.Now().Unix()

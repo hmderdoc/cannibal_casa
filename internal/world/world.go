@@ -1,12 +1,11 @@
-// Package world is the cul-de-sac: every player's State, the shared Nextdoor
+// Package world is the cul-de-sac: every player's World, the shared Nextdoor
 // feed, and neighbor-to-neighbor mail (casseroles and anonymous tips). Local
 // runs it in-process against a directory, which is what the door uses when no
-// server is configured and what the server wraps over TCP. Same rules, same
-// files, either way.
+// server is configured and what the server wraps over TCP.
 package world
 
 import (
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 )
 
 // FeedEntry is one line of the neighborhood feed.
@@ -24,7 +23,7 @@ type FeedEntry struct {
 // join: a casserole (a dish) or an anonymous tip to the HOA (Heat).
 type Mail struct {
 	Time    int64  `json:"t"`
-	From    string `json:"from"` // sender's cannibal name
+	From    string `json:"from"`
 	FromKey string `json:"from_key"`
 	Kind    string `json:"kind"` // casserole | tip
 	Recipe  string `json:"recipe,omitempty"`
@@ -34,28 +33,26 @@ type Mail struct {
 // Neighbor is a player as seen from the street.
 type Neighbor struct {
 	Key string `json:"key"`
-	game.Summary
+	sim.Summary
 }
 
-// Neighborhood is the street view: who lives here and what's been said.
+// Neighborhood is the street view.
 type Neighborhood struct {
 	Neighbors []Neighbor  `json:"neighbors"`
 	Feed      []FeedEntry `json:"feed"`
 }
 
-// Backend is what the door talks to. Local implements it in-process; the
-// door's remote client implements it over the wire; the server bridges the two.
+// Backend is what the door talks to. The clock is driven by Sync: the door
+// calls it about once a second with its speed (0 paused, 1, 2, 4) and the
+// backend advances the world by the wall-clock time elapsed, at the world's
+// scale times that speed. Join does the long catch-up from the last session.
 type Backend interface {
-	// Join loads (or creates) the player, grants the daily allowance and
-	// delivers any mail. Events describe what changed since last time.
-	Join(bbs, handle string) (*game.State, []game.Event, error)
-	// Do applies one action and persists the result.
-	Do(bbs, handle string, a game.Action) (*game.State, game.Result, error)
-	// Neighborhood returns the street: everyone's summary plus the feed.
+	Join(bbs, handle string) (*sim.World, []sim.Event, int, error)
+	Sync(bbs, handle string, speed int) (*sim.World, error)
+	Do(bbs, handle string, c sim.Command) (*sim.World, error)
 	Neighborhood(bbs, handle string) (Neighborhood, error)
-	// Casserole sends one of the player's dishes to a neighbor by key.
-	Casserole(bbs, handle, toKey string, dishID int) (*game.State, game.Result, error)
-	// Tip phones in an anonymous complaint about a neighbor. Once a day; can backfire.
-	Tip(bbs, handle, toKey string) (*game.State, game.Result, error)
+	Casserole(bbs, handle, toKey string, dishID int) (*sim.World, error)
+	Tip(bbs, handle, toKey string) (*sim.World, error)
+	Leave(bbs, handle string) error
 	Close() error
 }

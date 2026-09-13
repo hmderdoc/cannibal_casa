@@ -6,104 +6,155 @@ import (
 	"sync"
 	"time"
 
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 )
 
-// Local is the in-process Backend over a Store. One mutex serializes every
-// call: the rules run in microseconds, so contention is a non-issue and the
-// feed/mail files stay consistent.
+// Local is the in-process Backend over a Store. Worlds stay loaded between
+// calls while a player is present, and are saved on every command, every
+// saveEvery of wall-clock time, and on Leave.
 type Local struct {
 	Store Store
-	Rules game.Rules
-	Now   func() time.Time // injectable for tests
+	Scale int
+	Now   func() time.Time
 	mu    sync.Mutex
+	live  map[string]*live
 }
 
-// NewLocal opens (or creates) a neighborhood directory.
-func NewLocal(dir string, rules game.Rules) *Local {
-	return &Local{Store: Store{Dir: dir}, Rules: rules, Now: time.Now}
+type live struct {
+	w     *sim.World
+	saved time.Time
+}
+
+const saveEvery = 20 * time.Second
+
+func NewLocal(dir string, scale int) *Local {
+	if scale <= 0 {
+		scale = sim.DefaultScale
+	}
+	return &Local{Store: Store{Dir: dir}, Scale: scale, Now: time.Now, live: map[string]*live{}}
 }
 
 func (l *Local) today() string { return l.Now().Format("2006-01-02") }
 
-func (l *Local) load(bbs, handle string) (*game.State, string, error) {
+// get returns the loaded world for a key, loading it if needed.
+func (l *Local) get(bbs, handle string) (*live, string, error) {
 	key := Key(bbs, handle)
-	s, err := l.Store.Load(key)
+	if lv, ok := l.live[key]; ok {
+		return lv, key, nil
+	}
+	w, err := l.Store.Load(key)
 	if err != nil {
 		return nil, key, err
 	}
-	if s == nil {
+	if w == nil {
 		return nil, key, fmt.Errorf("no such player: %s", key)
 	}
-	return s, key, nil
+	lv := &live{w: w, saved: l.Now()}
+	l.live[key] = lv
+	return lv, key, nil
 }
 
-func (l *Local) Join(bbs, handle string) (*game.State, []game.Event, error) {
+// flush posts pending feed lines and saves.
+func (l *Local) flush(key string, lv *live, force bool) error {
+	w := lv.w
+	for _, p := range w.Posts {
+		l.Store.Post(FeedEntry{Key: key, Handle: w.Handle, BBS: w.BBS, Cannibal: w.Cannibal, Text: p.Text, Kind: p.Kind})
+	}
+	w.Posts = nil
+	if force || l.Now().Sub(lv.saved) >= saveEvery {
+		lv.saved = l.Now()
+		return l.Store.Save(key, w)
+	}
+	return nil
+}
+
+func (l *Local) Join(bbs, handle string) (*sim.World, []sim.Event, int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	key := Key(bbs, handle)
-	s, err := l.Store.Load(key)
-	if err != nil {
-		return nil, nil, err
+	var events []sim.Event
+	lv, ok := l.live[key]
+	if !ok {
+		w, err := l.Store.Load(key)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if w == nil {
+			w = sim.New(handle, bbs, l.Now().UnixNano()^rand.Int63())
+			w.Scale = l.Scale
+			events = append(events, sim.Event{Kind: "info", Text: "A new family moves onto the cul-de-sac. The welcome basket is muffins. Yours will not be."})
+			l.Store.Post(FeedEntry{Key: key, Handle: handle, BBS: bbs, Cannibal: w.Cannibal, Kind: "info",
+				Text: "moved in. Waved at everyone. Asked about the neighbors' 'dietary restrictions'."})
+		}
+		lv = &live{w: w, saved: l.Now()}
+		l.live[key] = lv
 	}
-	var events []game.Event
-	if s == nil {
-		s = game.NewState(handle, bbs, l.Now().UnixNano()^rand.Int63())
-		events = append(events, game.Event{Kind: "info", Text: "A new family moves onto the cul-de-sac. The welcome basket is muffins. Yours will not be."})
-		l.Store.Post(FeedEntry{Key: key, Handle: handle, BBS: bbs, Cannibal: s.Cannibal, Kind: "info",
-			Text: "moved in. Waved at everyone. Asked about the neighbors' 'dietary restrictions'."})
-	}
-	if game.GrantAllowance(s, l.Rules, l.today()) {
-		events = append(events, game.Event{Kind: "good", Text: fmt.Sprintf("A new real day: +%d in-game days to spend (%d banked).", l.Rules.DaysPerDay, s.Bank)})
-	}
+	w := lv.w
+	ticks := w.Catchup(l.Now())
 	mail, _ := l.Store.TakeMail(key)
 	for _, m := range mail {
 		switch m.Kind {
 		case "casserole":
-			rc := game.RecipeByID(m.Recipe)
+			rc := sim.RecipeByID(m.Recipe)
 			if rc == nil {
 				continue
 			}
-			s.NextID++
-			s.Dishes = append(s.Dishes, game.Dish{ID: s.NextID, Recipe: m.Recipe, Quality: m.Quality, Shelf: 3})
-			events = append(events, game.Event{Kind: "food", Text: fmt.Sprintf("%s left a %s on the porch. Neighborly. Suspiciously neighborly.", m.From, rc.Name)})
-		case "tip":
-			s.Heat += 10
-			if s.Heat > 120 {
-				s.Heat = 120
+			w.NextID++
+			if len(w.Pantry) < w.PantryCap() {
+				w.Pantry = append(w.Pantry, sim.Item{ID: w.NextID, Kind: "dish", Sub: m.Recipe, Quality: m.Quality, Born: w.Clock})
+				events = append(events, sim.Event{Kind: "food", Text: fmt.Sprintf("%s left a %s on the porch. Neighborly. Suspiciously neighborly.", m.From, rc.Name)})
 			}
-			events = append(events, game.Event{Kind: "heat", Text: "Somebody phoned the HOA about 'smells' from your garage. Anonymous. Heat +10."})
+		case "tip":
+			w.Heat += 10
+			if w.Heat > 120 {
+				w.Heat = 120
+			}
+			events = append(events, sim.Event{Kind: "heat", Text: "Somebody phoned the HOA about 'smells' from your garage. Anonymous. Heat +10."})
 		}
 	}
-	if err := l.Store.Save(key, s); err != nil {
-		return nil, nil, err
+	if err := l.flush(key, lv, true); err != nil {
+		return nil, nil, 0, err
 	}
-	return s, events, nil
+	return w, events, ticks, nil
 }
 
-func (l *Local) Do(bbs, handle string, a game.Action) (*game.State, game.Result, error) {
+func (l *Local) Sync(bbs, handle string, speed int) (*sim.World, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	s, key, err := l.load(bbs, handle)
+	lv, key, err := l.get(bbs, handle)
 	if err != nil {
-		return nil, game.Result{}, err
+		return nil, err
 	}
-	r := game.Apply(s, a)
-	if r.Err != "" {
-		return s, r, nil
+	lv.w.Sync(l.Now(), speed)
+	if err := l.flush(key, lv, false); err != nil {
+		return nil, err
 	}
-	for _, p := range r.Posts {
-		l.Store.Post(FeedEntry{Key: key, Handle: handle, BBS: bbs, Cannibal: s.Cannibal, Text: p.Text, Kind: p.Kind})
+	return lv.w, nil
+}
+
+func (l *Local) Do(bbs, handle string, c sim.Command) (*sim.World, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	lv, key, err := l.get(bbs, handle)
+	if err != nil {
+		return nil, err
 	}
-	if err := l.Store.Save(key, s); err != nil {
-		return nil, game.Result{}, err
+	if err := lv.w.Apply(c); err != nil {
+		return lv.w, err
 	}
-	return s, r, nil
+	if err := l.flush(key, lv, true); err != nil {
+		return nil, err
+	}
+	return lv.w, nil
 }
 
 func (l *Local) Neighborhood(bbs, handle string) (Neighborhood, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// Make sure our own latest state is on disk so the listing includes it.
+	if lv, ok := l.live[Key(bbs, handle)]; ok {
+		l.flush(Key(bbs, handle), lv, true)
+	}
 	ns, err := l.Store.All()
 	if err != nil {
 		return Neighborhood{}, err
@@ -115,80 +166,86 @@ func (l *Local) Neighborhood(bbs, handle string) (Neighborhood, error) {
 	return Neighborhood{Neighbors: ns, Feed: feed}, nil
 }
 
-func (l *Local) Casserole(bbs, handle, toKey string, dishID int) (*game.State, game.Result, error) {
+func (l *Local) Casserole(bbs, handle, toKey string, dishID int) (*sim.World, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	s, key, err := l.load(bbs, handle)
+	lv, key, err := l.get(bbs, handle)
 	if err != nil {
-		return nil, game.Result{}, err
+		return nil, err
 	}
-	r := game.Result{}
+	w := lv.w
 	if toKey == key {
-		r.Err = "You can't send yourself a casserole. You can just eat it."
-		return s, r, nil
+		return w, fmt.Errorf("you can't send yourself a casserole; you can just eat it")
 	}
 	to, err := l.Store.Load(toKey)
 	if err != nil || to == nil {
-		r.Err = "No such neighbor."
-		return s, r, nil
+		return w, fmt.Errorf("no such neighbor")
 	}
-	for i, d := range s.Dishes {
+	for i, d := range w.Pantry {
 		if d.ID != dishID {
 			continue
 		}
-		rc := game.RecipeByID(d.Recipe)
+		rc := sim.RecipeByID(d.Sub)
 		if !rc.Food {
-			r.Err = "That's not food. Even by your standards."
-			return s, r, nil
+			return w, fmt.Errorf("that's not food, even by your standards")
 		}
-		s.Dishes = append(s.Dishes[:i], s.Dishes[i+1:]...)
-		l.Store.SendMail(toKey, Mail{From: s.Cannibal, FromKey: key, Kind: "casserole", Recipe: d.Recipe, Quality: d.Quality})
-		r.Events = append(r.Events, game.Event{Kind: "good", Text: fmt.Sprintf("Left a %s on %s's porch. What a neighbor you are.", rc.Name, to.Cannibal)})
-		l.Store.Post(FeedEntry{Key: key, Handle: handle, BBS: bbs, Cannibal: s.Cannibal, Kind: "good",
-			Text: fmt.Sprintf("dropped off a %s at %s's place. 'Family recipe.'", rc.Name, to.Cannibal)})
-		if err := l.Store.Save(key, s); err != nil {
-			return nil, game.Result{}, err
-		}
-		return s, r, nil
+		w.Pantry = append(w.Pantry[:i], w.Pantry[i+1:]...)
+		l.Store.SendMail(toKey, Mail{From: w.Cannibal, FromKey: key, Kind: "casserole", Recipe: d.Sub, Quality: d.Quality})
+		w.Posts = append(w.Posts, sim.Event{Kind: "good", Text: fmt.Sprintf("dropped off a %s at %s's place. 'Family recipe.'", rc.Name, to.Cannibal)})
+		l.flush(key, lv, true)
+		return w, nil
 	}
-	r.Err = "No such dish."
-	return s, r, nil
+	return w, fmt.Errorf("no such dish")
 }
 
-func (l *Local) Tip(bbs, handle, toKey string) (*game.State, game.Result, error) {
+func (l *Local) Tip(bbs, handle, toKey string) (*sim.World, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	s, key, err := l.load(bbs, handle)
+	lv, key, err := l.get(bbs, handle)
 	if err != nil {
-		return nil, game.Result{}, err
+		return nil, err
 	}
-	r := game.Result{}
+	w := lv.w
 	if toKey == key {
-		r.Err = "Reporting yourself is a bold strategy."
-		return s, r, nil
-	}
-	if s.LastTip == l.today() {
-		r.Err = "The HOA hotline knows your voice by now. One tip a day."
-		return s, r, nil
+		return w, fmt.Errorf("reporting yourself is a bold strategy")
 	}
 	to, err := l.Store.Load(toKey)
 	if err != nil || to == nil {
-		r.Err = "No such neighbor."
-		return s, r, nil
+		return w, fmt.Errorf("no such neighbor")
 	}
-	s.LastTip = l.today()
-	l.Store.SendMail(toKey, Mail{From: s.Cannibal, FromKey: key, Kind: "tip"})
-	r.Events = append(r.Events, game.Event{Kind: "info", Text: fmt.Sprintf("You called the HOA about %s's garage. Anonymously. Mostly.", to.Cannibal)})
+	l.Store.SendMail(toKey, Mail{From: w.Cannibal, FromKey: key, Kind: "tip"})
 	if rand.Intn(100) < 35 {
-		s.Heat += 8
-		r.Events = append(r.Events, game.Event{Kind: "bad", Text: "The hotline has caller ID. Heat +8. Worth it?"})
-		l.Store.Post(FeedEntry{Key: key, Handle: handle, BBS: bbs, Cannibal: s.Cannibal, Kind: "heat",
-			Text: fmt.Sprintf("tried to snitch on %s and got traced. Awkward at the mailbox now.", to.Cannibal)})
+		w.Heat += 8
+		w.Posts = append(w.Posts, sim.Event{Kind: "heat", Text: fmt.Sprintf("tried to snitch on %s and got traced. Awkward at the mailbox now.", to.Cannibal)})
+		l.flush(key, lv, true)
+		return w, fmt.Errorf("the hotline has caller ID: Heat +8 for you")
 	}
-	if err := l.Store.Save(key, s); err != nil {
-		return nil, game.Result{}, err
-	}
-	return s, r, nil
+	l.flush(key, lv, true)
+	return w, nil
 }
 
-func (l *Local) Close() error { return nil }
+func (l *Local) Leave(bbs, handle string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	key := Key(bbs, handle)
+	lv, ok := l.live[key]
+	if !ok {
+		return nil
+	}
+	err := l.flush(key, lv, true)
+	delete(l.live, key)
+	return err
+}
+
+func (l *Local) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var first error
+	for key, lv := range l.live {
+		if err := l.flush(key, lv, true); err != nil && first == nil {
+			first = err
+		}
+	}
+	l.live = map[string]*live{}
+	return first
+}

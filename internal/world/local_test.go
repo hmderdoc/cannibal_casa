@@ -4,24 +4,20 @@ import (
 	"testing"
 	"time"
 
-	"cannibalcasa/internal/game"
+	"cannibalcasa/internal/sim"
 )
 
 func TestLocalNeighborhood(t *testing.T) {
 	dir := t.TempDir()
-	l := NewLocal(dir, game.DefaultRules)
+	l := NewLocal(dir, 60)
 	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	l.Now = func() time.Time { return now }
 
-	a, ev, err := l.Join("bbs1", "Alice")
-	if err != nil || a == nil || len(ev) < 2 {
+	a, ev, _, err := l.Join("bbs1", "Alice")
+	if err != nil || a == nil || len(ev) == 0 {
 		t.Fatalf("join alice: %v %v", err, ev)
 	}
-	if a.Bank != 3 {
-		t.Fatalf("allowance not granted on first join: %d", a.Bank)
-	}
-	b, _, err := l.Join("bbs2", "Bob")
-	if err != nil {
+	if _, _, _, err := l.Join("bbs2", "Bob"); err != nil {
 		t.Fatal(err)
 	}
 	hood, err := l.Neighborhood("bbs1", "Alice")
@@ -29,46 +25,60 @@ func TestLocalNeighborhood(t *testing.T) {
 		t.Fatalf("neighborhood: %v %+v", err, hood)
 	}
 
-	// Alice cooks nothing yet, so a casserole must fail; give her a dish.
-	a.Dishes = append(a.Dishes, game.Dish{ID: 999, Recipe: "fritters", Quality: 4, Shelf: 3})
-	l.Store.Save(Key("bbs1", "Alice"), a)
-	_, r, err := l.Casserole("bbs1", "Alice", Key("bbs2", "Bob"), 999)
-	if err != nil || r.Err != "" {
-		t.Fatalf("casserole: %v %s", err, r.Err)
+	// The clock runs on wall time: a real minute at scale 60 is a game hour.
+	before := a.Clock
+	now = now.Add(time.Minute)
+	a, _ = l.Sync("bbs1", "Alice", 1)
+	if a.Clock != before+60 {
+		t.Fatalf("sync: clock %d -> %d", before, a.Clock)
 	}
-	b, ev, _ = l.Join("bbs2", "Bob")
-	if len(b.Dishes) != 1 || b.Dishes[0].Recipe != "fritters" {
-		t.Fatalf("bob didn't get the casserole: %+v (%v)", b.Dishes, ev)
+	now = now.Add(time.Minute)
+	a, _ = l.Sync("bbs1", "Alice", 0) // paused
+	if a.Clock != before+60 {
+		t.Fatal("paused sync advanced the clock")
+	}
+
+	// A casserole reaches Bob's pantry on his next join.
+	dish := a.Pantry[0]
+	if _, err := l.Casserole("bbs1", "Alice", Key("bbs2", "Bob"), dish.ID); err != nil {
+		t.Fatalf("casserole: %v", err)
+	}
+	b, ev, _, _ := l.Join("bbs2", "Bob")
+	found := false
+	for _, e := range ev {
+		if e.Kind == "food" {
+			found = true
+		}
+	}
+	if !found || len(b.Pantry) != 3 {
+		t.Fatalf("bob didn't get the casserole: %d dishes (%v)", len(b.Pantry), ev)
 	}
 
 	heat := b.Heat
-	_, r, _ = l.Tip("bbs1", "Alice", Key("bbs2", "Bob"))
-	if r.Err != "" {
-		t.Fatalf("tip: %s", r.Err)
-	}
-	if _, r, _ = l.Tip("bbs1", "Alice", Key("bbs2", "Bob")); r.Err == "" {
-		t.Fatal("second tip the same day should be refused")
-	}
-	b, _, _ = l.Join("bbs2", "Bob")
+	l.Tip("bbs1", "Alice", Key("bbs2", "Bob"))
+	l.Leave("bbs2", "Bob")
+	b, _, _, _ = l.Join("bbs2", "Bob")
 	if b.Heat != heat+10 {
-		t.Fatalf("tip didn't land: %d -> %d", heat, b.Heat)
+		t.Fatalf("tip didn't land: %.0f -> %.0f", heat, b.Heat)
 	}
 
-	// Do persists and posts.
+	// Commands persist and post.
 	a.Cash = 1000
-	l.Store.Save(Key("bbs1", "Alice"), a)
-	s, r, err := l.Do("bbs1", "Alice", game.Action{Kind: "build", Name: "cell_2"})
-	if err != nil || r.Err != "" || !s.Has("cell_2") {
-		t.Fatalf("do: %v %s", err, r.Err)
+	w, err := l.Do("bbs1", "Alice", sim.Command{Kind: "build", Name: "cell_2"})
+	if err != nil || !w.Has("cell_2") {
+		t.Fatalf("do: %v", err)
 	}
 	hood, _ = l.Neighborhood("bbs1", "Alice")
-	if hood.Feed[len(hood.Feed)-1].Text == "" || hood.Feed[len(hood.Feed)-1].Handle != "Alice" {
+	last := hood.Feed[len(hood.Feed)-1]
+	if last.Handle != "Alice" || last.Text == "" {
 		t.Fatalf("cell post missing: %+v", hood.Feed)
 	}
-	// Next real day: allowance again.
-	now = now.Add(24 * time.Hour)
-	a, _, _ = l.Join("bbs1", "Alice")
-	if a.Bank != 6 {
-		t.Fatalf("second-day allowance: %d", a.Bank)
+	// Leave saves; a fresh Local reloads the same clock.
+	l.Leave("bbs1", "Alice")
+	l2 := NewLocal(dir, 60)
+	l2.Now = func() time.Time { return now }
+	a2, _, ticks, _ := l2.Join("bbs1", "Alice")
+	if a2.Clock != a.Clock || ticks != 0 || !a2.Has("cell_2") {
+		t.Fatalf("reload: clock %d vs %d, ticks %d", a2.Clock, a.Clock, ticks)
 	}
 }
