@@ -1,0 +1,18 @@
+[Unit]
+Description=Cannibal Casa neighborhood server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Adjust user/paths to your install. The token must match [server] token in
+# each door's cannibalcasa.ini; it is visible in `ps` and in this unit, so keep
+# the box's local users trusted.
+User=sbbs
+Group=sbbs
+WorkingDirectory=/sbbs/xtrn/cannibal_casa
+ExecStart=/sbbs/xtrn/cannibal_casa/cannibalcasa-server -addr :7710 -token CHANGE_ME -data /sbbs/data/cannibalcasa
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

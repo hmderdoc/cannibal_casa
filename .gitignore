@@ -1,0 +1,18 @@
+# Build artifacts (anchored: the binaries share names with source dirs under cmd/).
+/cannibalcasa
+/cannibalcasa.exe
+/cannibalcasa-server
+/cannibalcasa-server.exe
+/balancesim
+/balancesim.exe
+/dist/
+
+# Live sysop-edited config, seeded from cannibalcasa.example.ini by install-xtrn.
+/cannibalcasa.ini
+
+# Runtime data (per-player saves, the neighborhood feed, mail) and logs.
+/data/
+*.log
+
+# OS cruft
+.DS_Store

@@ -1,0 +1,85 @@
+name: release
+
+# Tag a release to build it:  git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: "386" }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: linux,   goarch: arm, goarm: "6" }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: "386" }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: freebsd, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: build + package
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: "0"
+        run: |
+          set -eu
+          VERSION="${GITHUB_REF_NAME}"
+          EXT=""
+          [ "$GOOS" = "windows" ] && EXT=".exe"
+          NAME="cannibalcasa_${VERSION}_${GOOS}_${GOARCH}"
+          OUT="dist/$NAME"
+          mkdir -p "$OUT"
+
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          go build -trimpath -ldflags "$LDFLAGS" -o "$OUT/cannibalcasa$EXT" ./cmd/cannibalcasa
+          go build -trimpath -ldflags "$LDFLAGS" -o "$OUT/cannibalcasa-server$EXT" ./cmd/cannibalcasa-server
+
+          cp README.md cannibalcasa.example.ini install-xtrn.ini "$OUT/"
+          cp -r docs "$OUT/"
+          if [ "$GOOS" != "windows" ]; then cp cannibalcasa-server.service "$OUT/"; fi
+
+          cd dist
+          if [ "$GOOS" = "windows" ]; then
+            zip -r "$NAME.zip" "$NAME"
+          else
+            tar czf "$NAME.tar.gz" "$NAME"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cannibalcasa-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/*.zip
+            dist/**/*.tar.gz
+          generate_release_notes: true
