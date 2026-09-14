@@ -440,16 +440,28 @@ var recipeByID = func() map[string]*Recipe {
 
 func RecipeByID(id string) *Recipe { return recipeByID[id] }
 
-var relations = []string{
-	"Uncle", "Aunt", "Cousin", "Nephew", "Niece", "Grandma", "Grandpa", "Great-Aunt",
-	"Stepdad", "Stepmom", "Twin", "Estranged Brother", "Half-Sister", "Godfather",
+// The dynasty's relatives and names, each with a gender so "Stepmom Patrick"
+// can't happen. "" means either.
+type named struct {
+	Name   string
+	Gender string
 }
 
-var cannibalNames = []string{
-	"Lovett", "Vincent", "Sawyer", "Dexter", "Fester", "Hannibal", "Morticia", "Gomez",
-	"Ruth", "Buck", "Eddie", "Leatherface Jr.", "Clarice", "Ravenous Ray", "Sweeney",
-	"Raoul", "Delores", "Chianti", "Barbecue Bob", "Mildred", "Ottis", "Patrick",
-	"Norma", "Norman", "Ed", "Judith", "Fannie", "Cletus", "Marge", "Tobias",
+var relations = []named{
+	{"Uncle", "m"}, {"Aunt", "f"}, {"Cousin", ""}, {"Nephew", "m"}, {"Niece", "f"}, {"Grandma", "f"},
+	{"Grandpa", "m"}, {"Great-Aunt", "f"}, {"Great-Uncle", "m"}, {"Stepdad", "m"}, {"Stepmom", "f"}, {"Twin", ""},
+	{"Estranged Brother", "m"}, {"Estranged Sister", "f"}, {"Half-Sister", "f"}, {"Half-Brother", "m"},
+	{"Godfather", "m"}, {"Godmother", "f"}, {"Cousin-in-law", ""},
+}
+
+var cannibalNames = []named{
+	{"Lovett", "f"}, {"Vincent", "m"}, {"Sawyer", ""}, {"Dexter", "m"}, {"Fester", "m"}, {"Hannibal", "m"},
+	{"Morticia", "f"}, {"Gomez", "m"}, {"Ruth", "f"}, {"Buck", "m"}, {"Eddie", "m"}, {"Leatherface Jr.", "m"},
+	{"Clarice", "f"}, {"Ravenous Ray", "m"}, {"Sweeney", "m"}, {"Raoul", "m"}, {"Delores", "f"}, {"Chianti", ""},
+	{"Barbecue Bob", "m"}, {"Mildred", "f"}, {"Ottis", "m"}, {"Patrick", "m"}, {"Norma", "f"}, {"Norman", "m"},
+	{"Ed", "m"}, {"Judith", "f"}, {"Fannie", "f"}, {"Cletus", "m"}, {"Marge", "f"}, {"Tobias", "m"},
+	{"Wednesday", "f"}, {"Lizzie", "f"}, {"Rosemary", "f"}, {"Annie", "f"}, {"Carrie", "f"}, {"Pearl", "f"},
+	{"Jack", "m"}, {"Vlad", "m"}, {"Herbert", "m"}, {"Ash", ""}, {"Sam", ""}, {"Lou", ""},
 }
 
 var inspectors = map[int]string{

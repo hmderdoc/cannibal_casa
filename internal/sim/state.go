@@ -667,5 +667,12 @@ func contains(list []string, v string) bool {
 }
 
 func randomCannibalName(r *rand.Rand) string {
-	return relations[r.Intn(len(relations))] + " " + cannibalNames[r.Intn(len(cannibalNames))]
+	rel := relations[r.Intn(len(relations))]
+	var pool []named
+	for _, n := range cannibalNames {
+		if rel.Gender == "" || n.Gender == "" || n.Gender == rel.Gender {
+			pool = append(pool, n)
+		}
+	}
+	return rel.Name + " " + pool[r.Intn(len(pool))].Name
 }

@@ -2,6 +2,8 @@ package sim
 
 import (
 	"encoding/json"
+	"math/rand"
+	"strings"
 	"testing"
 	"time"
 )
@@ -310,5 +312,26 @@ func TestFarmStandGetsStocked(t *testing.T) {
 	w.Advance(6 * 60)
 	if len(w.Stand) == 0 && w.Stats.Sold == 0 {
 		t.Fatalf("nothing reached the farm stand: stand=%d sold=%d", len(w.Stand), w.Stats.Sold)
+	}
+}
+
+func TestCannibalNamesAgree(t *testing.T) {
+	gender := map[string]string{}
+	for _, n := range relations {
+		gender[n.Name] = n.Gender
+	}
+	for _, n := range cannibalNames {
+		gender[n.Name] = n.Gender
+	}
+	for seed := int64(0); seed < 500; seed++ {
+		name := randomCannibalName(rand.New(rand.NewSource(seed)))
+		i := strings.LastIndex(name, " ")
+		rel, first := name[:i], name[i+1:]
+		if strings.HasSuffix(first, "Jr.") || first == "Bob" || first == "Ray" {
+			continue // two-word names; covered by the pool filter itself
+		}
+		if g1, g2 := gender[rel], gender[first]; g1 != "" && g2 != "" && g1 != g2 {
+			t.Fatalf("mismatched dynasty name %q", name)
+		}
 	}
 }
