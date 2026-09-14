@@ -358,7 +358,7 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 		lineBg = ui.Col("alert_bg")
 	}
 	b.Fill(x, y, iw, 1, ' ', ui.White, lineBg)
-	x2 = statBg(b, x, y, "Step", fmt.Sprint(pile), pick(pile == 0, ui.Col("good"), pick(pile < 4, ui.Col("warn"), ui.Col("bad"))), lineBg)
+	x2 = statBg(b, x, y, "Bags", fmt.Sprint(pile), pick(pile == 0, ui.Col("good"), pick(pile < 4, ui.Col("warn"), ui.Col("bad"))), lineBg)
 	x2 = statBg(b, x2+2, y, "Cars", fmt.Sprint(cars), pick(cars == 0, ui.Col("good"), ui.Col("bad")), lineBg)
 	statBg(b, x2+2, y, "Buried", fmt.Sprintf("%d/%d", s.Buried, s.PlotCap()), pick(s.Buried >= s.PlotCap() && s.PlotCap() > 0, ui.Col("warn"), ui.Col("text")), lineBg)
 	y++
