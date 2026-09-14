@@ -215,7 +215,7 @@ func (a *app) inspectCursor() {
 			for _, t := range v.Traits {
 				who = append(who, sim.Traits[t])
 			}
-			a.modal = textPanel(v.Name, []sim.Line{{Kind: "dim", Text: v.Flavor},
+			a.modal = textPanel(v.Name, []sim.Line{{Kind: "flavor", Text: v.Flavor},
 				{Kind: "info", Text: "One of " + strings.Join(who, ", ") + ". Marbling " + strings.Repeat("*", v.Marbling) + ", fight " + strings.Repeat("!", v.Fight) + "."}})
 			return
 		}
@@ -431,6 +431,10 @@ func kindColor(kind string) ui.Attr {
 		return ui.Col("dim")
 	case "title":
 		return ui.Col("title")
+	case "flavor":
+		return ui.Col("flavor")
+	case "rule":
+		return ui.Col("rule")
 	}
 	return ui.Col(kind)
 }

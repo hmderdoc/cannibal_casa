@@ -91,9 +91,15 @@ var Palette = map[string]Attr{
 	"victim_heat":  BrightCyan,
 	// chrome
 	"title":    BrightRed,
-	"text":     White,
+	"text":     BrightWhite, // content
 	"bright":   BrightWhite,
-	"dim":      Gray,
+	"dim":      Gray,        // hints and labels only
+	"flavor":   Lavender,    // the joke line
+	"rule":     Gold,        // placement rule, footers of menus
+	"strip_bg": Attr{4, 17}, // title and status strips
+	"strip_fg": BrightWhite,
+	"alert_bg": Attr{1, 88},
+	"calm_bg":  Attr{2, 22},
 	"border":   Blood,
 	"key":      Yellow,
 	"sel_bg":   Blood,
@@ -106,7 +112,7 @@ var Palette = map[string]Attr{
 	"heat_hi":  BrightRed,
 	"bar_off":  Slate,
 	// log kinds
-	"info":    White,
+	"info":    BrightWhite,
 	"good":    BrightGreen,
 	"bad":     BrightRed,
 	"heat":    BrightMagenta,

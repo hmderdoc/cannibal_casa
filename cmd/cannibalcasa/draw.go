@@ -109,8 +109,12 @@ func (a *app) drawMap(ox, oy int) {
 	p := a.plan()
 	border := ui.Col("border")
 	b.Box(ox, oy, mapW, mapH, border, ui.Black, "", ui.Black)
-	b.Print(ox+2, oy, fmt.Sprintf(" CANNIBAL CASA ─ %s ", strings.ToUpper(a.level.String())), ui.Col("title"), ui.Black)
-	b.Print(ox+mapW-14, oy, " Tab: floor ", ui.Col("dim"), ui.Black)
+	// Title strip across the top of the map frame.
+	b.Fill(ox+1, oy, mapW-2, 1, ' ', ui.Col("strip_fg"), ui.Col("strip_bg"))
+	b.Print(ox+2, oy, "CANNIBAL CASA", ui.Col("title"), ui.Col("strip_bg"))
+	b.Print(ox+16, oy, strings.ToUpper(a.level.String()), ui.Col("strip_fg"), ui.Col("strip_bg"))
+	b.Print(ox+mapW-12, oy, "Tab", ui.Col("key"), ui.Col("strip_bg"))
+	b.Print(ox+mapW-8, oy, "floor", ui.Col("label"), ui.Col("strip_bg"))
 
 	floorBg := a.levelBg(a.level)
 	wallCol := ui.Col("wall")
@@ -282,15 +286,20 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	if !s.Alive {
 		name += " (deceased)"
 	}
-	b.PrintN(x, y, trunc(fmt.Sprintf("%s  gen %d", name, s.Generation), iw), iw, ui.Col("bright"), ui.Black)
+	// Header strip: who and when.
+	b.Fill(ox+1, y, w-2, 2, ' ', ui.Col("strip_fg"), ui.Col("strip_bg"))
+	b.PrintN(x, y, trunc(name, iw-7), iw-7, ui.Col("strip_fg"), ui.Col("strip_bg"))
+	b.Print(x+iw-6, y, fmt.Sprintf("gen %d", s.Generation), ui.Col("label"), ui.Col("strip_bg"))
 	y++
 	speed := fmt.Sprintf("%dx", a.speed)
 	speedCol := ui.Col("good")
 	if a.speed == 0 {
 		speed, speedCol = "PAUSED", ui.Col("warn")
+	} else if _, ok := a.modal.(*menu); ok {
+		speed, speedCol = "menu", ui.Col("label")
 	}
-	b.PrintN(x, y, s.TimeString(), iw, ui.Col("text"), ui.Black)
-	b.Print(x+iw-len(speed), y, speed, speedCol, ui.Black)
+	b.PrintN(x, y, s.TimeString(), iw, ui.Col("strip_fg"), ui.Col("strip_bg"))
+	b.Print(x+iw-len(speed), y, speed, speedCol, ui.Col("strip_bg"))
 	y++
 	b.Print(x, y, fmt.Sprintf("Cash $%.0f", s.Cash), ui.Col("cash"), ui.Black)
 	b.Print(x+iw/2, y, fmt.Sprintf("Stars %d", s.Stars), ui.Col("stars"), ui.Black)
@@ -300,32 +309,50 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	if heat > 100 {
 		heat = 100
 	}
-	b.Print(x, y, "Heat  ", ui.Col("text"), ui.Black)
+	b.Print(x, y, "Heat", ui.Col("label"), ui.Black)
 	b.Bar(x+7, y, barW, int(heat), 100, tierColor(heat), ui.Col("bar_off"), ui.Black)
 	b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", heat), tierColor(heat), ui.Black)
 	y++
-	b.PrintN(x+7, y, sim.TierName(s.Tier()), iw-7, tierColor(heat), ui.Black)
+	tierBg := ui.Black
+	if s.Tier() >= 3 {
+		tierBg = ui.Col("alert_bg")
+	}
+	b.PrintN(x+7, y, sim.TierName(s.Tier()), iw-7, tierColor(heat), tierBg)
 	y++
 	if p := s.Player(); p != nil {
-		b.Print(x, y, "Hunger", ui.Col("text"), ui.Black)
+		b.Print(x, y, "Hunger", ui.Col("label"), ui.Black)
 		b.Bar(x+7, y, barW, int(p.Hunger), 100, needColor(p.Hunger), ui.Col("bar_off"), ui.Black)
 		b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", p.Hunger), needColor(p.Hunger), ui.Black)
 		y++
-		b.Print(x, y, "Energy", ui.Col("text"), ui.Black)
+		b.Print(x, y, "Energy", ui.Col("label"), ui.Black)
 		b.Bar(x+7, y, barW, int(p.Energy), 100, needColor(p.Energy), ui.Col("bar_off"), ui.Black)
 		b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", p.Energy), needColor(p.Energy), ui.Black)
 		y++
 	}
+	// Stock lines: label in gray, values colored by how they're doing.
 	fresh, frozen := fridgeUsed(s)
-	b.PrintN(x, y, fmt.Sprintf("Cells %d/%d  Fridge %d/%d +%d", len(s.Livestock), len(s.Cells()), fresh, s.FridgeCap(), frozen), iw, ui.Col("food"), ui.Black)
-	y++
-	b.PrintN(x, y, fmt.Sprintf("Shelf %d/%d  Stand %d/%d", len(s.Pantry), s.PantryCap(), len(s.Stand), s.StandCap()), iw, ui.Col("food"), ui.Black)
-	y++
-	pileCol := ui.Col("dim")
-	if len(s.Pile) > 0 || len(s.Driveway) > 0 {
-		pileCol = ui.Col("heat")
+	hungry := 0
+	for _, l := range s.Livestock {
+		if l.Hunger > 50 {
+			hungry++
+		}
 	}
-	b.PrintN(x, y, fmt.Sprintf("Step %d  Cars %d  Buried %d/%d", len(s.Pile), len(s.Driveway), s.Buried, s.PlotCap()), iw, pileCol, ui.Black)
+	x2 := stat(b, x, y, "Cells", fmt.Sprintf("%d/%d", len(s.Livestock), len(s.Cells())), pick(hungry > 0, ui.Col("warn"), ui.Col("food")))
+	stat(b, x2+2, y, "Fridge", fmt.Sprintf("%d/%d+%d", fresh, s.FridgeCap(), frozen), pick(fresh >= s.FridgeCap(), ui.Col("bad"), ui.Col("food")))
+	y++
+	x2 = stat(b, x, y, "Shelf", fmt.Sprintf("%d/%d", len(s.Pantry), s.PantryCap()), pick(len(s.Pantry) == 0, ui.Col("warn"), pick(len(s.Pantry) >= s.PantryCap(), ui.Col("bad"), ui.Col("food"))))
+	stat(b, x2+2, y, "Stand", fmt.Sprintf("%d/%d", len(s.Stand), s.StandCap()), ui.Col("cash"))
+	y++
+	// Evidence line: green when clean, yellow when there's work, red on a background when it's a problem.
+	pile, cars := len(s.Pile), len(s.Driveway)
+	lineBg := ui.Black
+	if pile >= 6 || cars >= 2 {
+		lineBg = ui.Col("alert_bg")
+	}
+	b.Fill(x, y, iw, 1, ' ', ui.White, lineBg)
+	x2 = statBg(b, x, y, "Step", fmt.Sprint(pile), pick(pile == 0, ui.Col("good"), pick(pile < 4, ui.Col("warn"), ui.Col("bad"))), lineBg)
+	x2 = statBg(b, x2+2, y, "Cars", fmt.Sprint(cars), pick(cars == 0, ui.Col("good"), ui.Col("bad")), lineBg)
+	statBg(b, x2+2, y, "Buried", fmt.Sprintf("%d/%d", s.Buried, s.PlotCap()), pick(s.Buried >= s.PlotCap() && s.PlotCap() > 0, ui.Col("warn"), ui.Col("text")), lineBg)
 	y++
 	for _, wk := range s.Workers {
 		if y >= oy+h-2 {
@@ -372,8 +399,29 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 		}
 	}
 	if alert != "" && y < oy+h-1 {
-		b.PrintN(x, y, alert, iw, alertCol, ui.Black)
+		bg := ui.Col("alert_bg")
+		if alertCol == ui.Col("good") {
+			bg = ui.Col("calm_bg")
+		}
+		b.PrintN(x, y, " "+alert, iw, ui.Col("strip_fg"), bg)
 	}
+}
+
+// stat prints "Label value" with the label in gray and returns the x after it.
+func stat(b *ui.Buffer, x, y int, label, value string, col ui.Attr) int {
+	return statBg(b, x, y, label, value, col, ui.Black)
+}
+
+func statBg(b *ui.Buffer, x, y int, label, value string, col, bg ui.Attr) int {
+	x = b.Print(x, y, label+" ", ui.Col("label"), bg)
+	return b.Print(x, y, value, col, bg)
+}
+
+func pick(cond bool, a, b ui.Attr) ui.Attr {
+	if cond {
+		return a
+	}
+	return b
 }
 
 func firstName(s string) string {
@@ -391,7 +439,8 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 	if h < 3 {
 		return
 	}
-	b.Box(ox, oy, w, h, ui.Col("border"), ui.Black, "Journal", ui.Col("dim"))
+	b.Box(ox, oy, w, h, ui.Col("border"), ui.Black, "", ui.Black)
+	b.Print(ox+2, oy, " Journal ", ui.Col("strip_fg"), ui.Col("strip_bg"))
 	var lines []sim.Line
 	if a.w != nil {
 		lines = append(lines, a.w.Ticker...)
@@ -412,7 +461,19 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 	}
 	y := oy + h - 2
 	for _, l := range rows {
-		b.PrintN(ox+2, y, l.Text, w-4, kindColor(l.Kind), ui.Black)
+		// "dN HH:MM " stamps in gray, the line itself in its kind's color.
+		stamp := 0
+		if strings.HasPrefix(l.Text, "d") {
+			if i := strings.Index(l.Text, ":"); i > 0 && i+3 < len(l.Text) {
+				stamp = i + 4
+			}
+		}
+		if stamp > 0 {
+			b.Print(ox+2, y, l.Text[:stamp], ui.Col("label"), ui.Black)
+			b.PrintN(ox+2+stamp, y, l.Text[stamp:], w-4-stamp, kindColor(l.Kind), ui.Black)
+		} else {
+			b.PrintN(ox+2, y, l.Text, w-4, kindColor(l.Kind), ui.Black)
+		}
 		y--
 	}
 }
@@ -423,16 +484,14 @@ func (a *app) drawFooter(y int) {
 		{"Spc", "pause"}, {"Tab", "floor"}, {"B", "build"}, {"G", "out"}, {"P", "policy"},
 		{"L", "roster"}, {"I", "stock"}, {"N", "street"}, {"?", "guide"},
 	}
+	bg := ui.Col("strip_bg")
+	b.Fill(0, y, b.W, 1, ' ', ui.White, bg)
 	x := 1
-	for i, kv := range keys {
+	for _, kv := range keys {
 		if x+len(kv.k)+len(kv.v)+2 > b.W {
 			break
 		}
-		if i > 0 {
-			b.Set(x, y, '·', ui.Col("dim"), ui.Black)
-			x++
-		}
-		x = b.Print(x, y, kv.k, ui.Col("key"), ui.Black)
-		x = b.Print(x, y, " "+kv.v, ui.Col("dim"), ui.Black)
+		x = b.Print(x, y, kv.k, ui.Col("key"), bg)
+		x = b.Print(x, y, " "+kv.v+" ", ui.Col("strip_fg"), bg)
 	}
 }

@@ -34,7 +34,7 @@ var effects = map[string]string{
 }
 
 func explain(w *sim.World, f *sim.Fixture) []sim.Line {
-	out := []sim.Line{{Kind: "dim", Text: f.Desc}}
+	out := []sim.Line{{Kind: "flavor", Text: f.Desc}}
 	switch f.Kind {
 	case sim.KindLure:
 		var who []string
@@ -101,6 +101,6 @@ func explain(w *sim.World, f *sim.Fixture) []sim.Line {
 	if f.Front {
 		where = "Goes on the porch."
 	}
-	out = append(out, sim.Line{Kind: "dim", Text: where})
+	out = append(out, sim.Line{Kind: "rule", Text: where})
 	return out
 }

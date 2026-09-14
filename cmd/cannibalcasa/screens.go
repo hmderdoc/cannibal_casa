@@ -157,7 +157,7 @@ func (m *menu) draw(a *app, b *ui.Buffer) {
 		b.Print(x+3, y+1, "(nothing here)", ui.Col("dim"), ui.Black)
 	}
 	if listH < len(m.items) {
-		b.Print(x+w-8, y+h-1, fmt.Sprintf(" %d/%d ", m.sel+1, len(m.items)), ui.Col("dim"), ui.Black)
+		b.Print(x+w-8, y+h-1, fmt.Sprintf(" %d/%d ", m.sel+1, len(m.items)), ui.Col("rule"), ui.Black)
 	}
 	if descH > 0 {
 		dy := y + 1 + listH
@@ -175,7 +175,7 @@ func (m *menu) draw(a *app, b *ui.Buffer) {
 			}
 		}
 	}
-	b.Print(x+2, y+h-1, " "+m.footer+" ", ui.Col("dim"), ui.Black)
+	b.Print(x+2, y+h-1, " "+m.footer+" ", ui.Col("rule"), ui.Black)
 }
 
 // ---------------------------------------------------------------------------
@@ -243,9 +243,9 @@ func (p *panel) draw(a *app, b *ui.Buffer) {
 		b.PrintN(x+2, y+1+i, rows[idx].Text, w-4, kindColor(rows[idx].Kind), ui.Black)
 	}
 	if len(rows) > h-2 {
-		b.Print(x+w-12, y+h-1, " ↑↓ more ", ui.Col("dim"), ui.Black)
+		b.Print(x+w-12, y+h-1, " ↑↓ more ", ui.Col("rule"), ui.Black)
 	}
-	b.Print(x+2, y+h-1, " "+p.footer+" ", ui.Col("dim"), ui.Black)
+	b.Print(x+2, y+h-1, " "+p.footer+" ", ui.Col("rule"), ui.Black)
 }
 
 func confirm(title, text string, yes func(a *app)) *menu {
@@ -340,7 +340,7 @@ func (a *app) fixtureStatus(f *sim.Fixture) []sim.Line {
 			if l.Cell == f.ID {
 				v := sim.VictimByID(l.Victim)
 				out = append(out, sim.Line{Kind: "food", Text: fmt.Sprintf("%s the %s. Marbling %.1f, hunger %.0f, %d day(s) here.", l.Name, v.Name, l.Marbling, l.Hunger, int(w.Clock-l.Since)/1440)})
-				out = append(out, sim.Line{Kind: "dim", Text: v.Flavor})
+				out = append(out, sim.Line{Kind: "flavor", Text: v.Flavor})
 				found = true
 			}
 		}
@@ -629,7 +629,7 @@ func (a *app) openSellList() {
 		if !can {
 			label += "  (missing gear)"
 		}
-		items = append(items, item{label: label, color: col, desc: []sim.Line{{Kind: "dim", Text: rc.Flavor}},
+		items = append(items, item{label: label, color: col, desc: []sim.Line{{Kind: "flavor", Text: rc.Flavor}},
 			onSelect: func(a *app) {
 				np := a.w.Policy
 				sell := map[string]bool{}
@@ -703,7 +703,7 @@ func (a *app) openRoster() {
 			where += " *" + l.Order
 		}
 		items = append(items, item{label: fmt.Sprintf("%-10s %-28s %-12s marb %.1f hunger %3.0f", l.Name, trunc(v.Name, 28), where, l.Marbling, l.Hunger), color: col,
-			desc:     []sim.Line{{Kind: "dim", Text: v.Flavor}, {Kind: "info", Text: fmt.Sprintf("Fight %d. Processed at marbling %d per policy. Enter: give a direct order.", v.Fight, w.Policy.ButcherMarbling)}},
+			desc:     []sim.Line{{Kind: "flavor", Text: v.Flavor}, {Kind: "info", Text: fmt.Sprintf("Fight %d. Processed at marbling %d per policy. Enter: give a direct order.", v.Fight, w.Policy.ButcherMarbling)}},
 			onSelect: func(a *app) { a.openOrders(l) }})
 	}
 	a.modal = newMenu("Roster", items)
@@ -753,7 +753,7 @@ func (a *app) openChairPicker() {
 		}
 		v := sim.VictimByID(l.Victim)
 		items = append(items, item{label: fmt.Sprintf("%-10s %-28s fight %d  marbling %.1f", l.Name, trunc(v.Name, 28), v.Fight, l.Marbling), color: ui.Col(v.Color),
-			desc: []sim.Line{{Kind: "dim", Text: v.Flavor}},
+			desc: []sim.Line{{Kind: "flavor", Text: v.Flavor}},
 			onSelect: func(a *app) {
 				if a.do(sim.Command{Kind: "order", ID: l.ID, Name: "chair"}) {
 					a.modal = nil
@@ -789,7 +789,7 @@ func (a *app) openInventory() {
 			col = ui.Col("cash")
 		}
 		items = append(items, item{label: fmt.Sprintf("%-34s %s", trunc(rc.Name, 34), starsText(d.Quality)), color: col,
-			desc: []sim.Line{{Kind: "dim", Text: rc.Flavor}, {Kind: "info", Text: "Enter: send this dish to a neighbor as a casserole."}},
+			desc: []sim.Line{{Kind: "flavor", Text: rc.Flavor}, {Kind: "info", Text: "Enter: send this dish to a neighbor as a casserole."}},
 			onSelect: func(a *app) {
 				if !rc.Food {
 					return
