@@ -447,11 +447,13 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 	}
 	lines = append(lines, a.notes...)
 	sort.SliceStable(lines, func(i, j int) bool { return lines[i].Tick < lines[j].Tick })
+	// Newest entry first, right under the map, so the eye lands on what just
+	// happened. A wrapped entry keeps its own lines in reading order.
 	var rows []sim.Line
 	for i := len(lines) - 1; i >= 0 && len(rows) < h-2; i-- {
 		stamp := fmt.Sprintf("d%d %02d:%02d ", lines[i].Tick/1440+1, lines[i].Tick%1440/60, lines[i].Tick%60)
 		ws := wrap(lines[i].Text, w-4-len(stamp))
-		for j := len(ws) - 1; j >= 0 && len(rows) < h-2; j-- {
+		for j := 0; j < len(ws) && len(rows) < h-2; j++ {
 			pre := strings.Repeat(" ", len(stamp))
 			if j == 0 {
 				pre = stamp
@@ -459,7 +461,7 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 			rows = append(rows, sim.Line{Kind: lines[i].Kind, Text: pre + ws[j]})
 		}
 	}
-	y := oy + h - 2
+	y := oy + 1
 	for _, l := range rows {
 		// "dN HH:MM " stamps in gray, the line itself in its kind's color.
 		stamp := 0
@@ -474,7 +476,7 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 		} else {
 			b.PrintN(ox+2, y, l.Text, w-4, kindColor(l.Kind), ui.Black)
 		}
-		y--
+		y++
 	}
 }
 
