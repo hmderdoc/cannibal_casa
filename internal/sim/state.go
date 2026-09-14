@@ -349,8 +349,8 @@ func (w *World) FixtureAt(p Pos) *Fixture {
 // CanPlace reports whether a fixture may go on a tile: plain floor on the
 // fixture's level (the porch for lures, trap and stand), not already taken.
 func (w *World) CanPlace(f *Fixture, p Pos) error {
-	if p.L != f.Level {
-		return fmt.Errorf("the %s goes on the %s", f.Name, f.Level)
+	if !f.AllowedOn(p.L) {
+		return fmt.Errorf("the %s goes on the %s", f.Name, f.Levels())
 	}
 	if !Plans[p.L].Floor(p.X, p.Y) {
 		return errors.New("that's not floor")

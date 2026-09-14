@@ -434,7 +434,7 @@ func (pl *placer) draw(a *app, b *ui.Buffer) {
 	if pl.move {
 		verb = "Move"
 	}
-	where := f.Level.String()
+	where := f.Levels()
 	if f.Front {
 		where = "the porch"
 	}
@@ -449,7 +449,9 @@ func (pl *placer) draw(a *app, b *ui.Buffer) {
 // sensible first tile.
 func (a *app) startPlacing(id string, move bool) {
 	f := sim.FixtureByID(id)
-	a.level = f.Level
+	if !f.AllowedOn(a.level) {
+		a.level = f.Level
+	}
 	if move {
 		at := a.w.Pos(id)
 		a.cx, a.cy = at.X, at.Y

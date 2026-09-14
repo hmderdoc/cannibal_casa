@@ -6,6 +6,8 @@
 // watching: an absence is just elapsed wall-clock time to catch up on.
 package sim
 
+import "strings"
+
 // Victim is an archetype of suburban adult who will not be missed (much).
 type Victim struct {
 	ID          string
@@ -97,6 +99,28 @@ var Traits = map[string]string{
 	"wellness": "wellness types",
 }
 
+// AllowedOn reports whether a fixture may be placed on a level.
+func (f *Fixture) AllowedOn(l Level) bool {
+	if l == f.Level {
+		return true
+	}
+	for _, o := range f.AlsoOn {
+		if o == l {
+			return true
+		}
+	}
+	return false
+}
+
+// Levels names every floor a fixture may go on: "ground floor or backyard".
+func (f *Fixture) Levels() string {
+	s := strings.ToLower(f.Level.String())
+	for _, o := range f.AlsoOn {
+		s += " or " + strings.ToLower(o.String())
+	}
+	return s
+}
+
 // Appeals reports whether a lure draws this archetype.
 func (f *Fixture) Appeals(v *Victim) bool {
 	for _, d := range f.Draws {
@@ -156,6 +180,7 @@ type Fixture struct {
 	ID       string
 	Name     string
 	Level    Level
+	AlsoOn   []Level // other floors it may be placed on
 	Front    bool
 	At       Pos
 	Cost     int
@@ -206,7 +231,7 @@ var Fixtures = []Fixture{
 		Desc: "10 frozen cuts. Overflow from the fridge freezes here; frozen meat never spoils but cooks a star lower."},
 	{ID: "grinder", Name: "Meat Grinder", Level: Ground, Cost: 80, Glyph: 'g', Color: "fix_kitchen", Kind: KindPassive,
 		Desc: "Turns scraps into pie filling. Unlocks Mrs. Lovett's pies."},
-	{ID: "smoker", Name: "Offset Smoker", Level: Ground, Cost: 200, Glyph: 'S', Color: "fix_kitchen", Kind: KindStation, Noise: 0.1,
+	{ID: "smoker", Name: "Offset Smoker", Level: Ground, AlsoOn: []Level{Backyard}, Cost: 200, Glyph: 'S', Color: "fix_kitchen", Kind: KindStation, Noise: 0.1,
 		Desc: "Fourteen hours, low and slow. Unlocks Long Pig Pulled Pork; the whole street smells it."},
 	{ID: "sous_vide", Name: "Sous Vide Circulator", Level: Ground, Cost: 180, Glyph: '~', Color: "fix_kitchen", Kind: KindStation, Draw: 0.04,
 		Desc: "Edge to edge pink. Unlocks the five-star loin."},
@@ -245,11 +270,11 @@ var Fixtures = []Fixture{
 		Desc: "'FREE WIFI' on the side. A worker hauls a victim's car to a lot two counties over in an hour."},
 	{ID: "chest_freezer", Name: "Chest Freezer", Level: Ground, Cost: 220, Prereq: "freezer", Glyph: '*', Color: "fix_cold", Kind: KindContainer, Capacity: 16, Draw: 0.1,
 		Desc: "+16 frozen cuts. Every suburban garage has one. Yours is honest about it."},
-	{ID: "chipper", Name: "Wood Chipper", Level: Ground, Cost: 350, Glyph: '@', Color: "fix_garage", Kind: KindDisposal, Duration: 5, Noise: 3, Accepts: []string{"bones", "clothes", "phone"},
+	{ID: "chipper", Name: "Wood Chipper", Level: Ground, AlsoOn: []Level{Backyard}, Cost: 350, Glyph: '@', Color: "fix_garage", Kind: KindDisposal, Duration: 5, Noise: 3, Accepts: []string{"bones", "clothes", "phone"},
 		Desc: "Five minutes per item. Very loud. Very Fargo."},
 	{ID: "chemistry", Name: "Chemistry Set", Level: Ground, Cost: 90, Glyph: 'q', Color: "fix_garage", Kind: KindPassive,
 		Desc: "Chloroform on the mat. The trap fires more often."},
-	{ID: "lye_tub", Name: "Plastic Tub of Lye", Level: Ground, Cost: 150, Glyph: 'l', Color: "fix_garage", Kind: KindDisposal, Duration: 720, Accepts: []string{"bones", "clothes"},
+	{ID: "lye_tub", Name: "Plastic Tub of Lye", Level: Ground, AlsoOn: []Level{Backyard}, Cost: 150, Glyph: 'l', Color: "fix_garage", Kind: KindDisposal, Duration: 720, Accepts: []string{"bones", "clothes"},
 		Desc: "Twelve hours per item, silent. Plastic, not ceramic. You've seen the show."},
 	// --- basement ----------------------------------------------------------
 	{ID: "cell_1", Name: "Cell 1", Level: Basement, At: Pos{Basement, 3, 1}, Cost: 0, Glyph: 'n', Color: "fix_cell", Kind: KindCell, Starter: true,

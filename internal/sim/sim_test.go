@@ -241,3 +241,14 @@ func TestUpgradeCommandNeedsNoTile(t *testing.T) {
 		t.Fatal("a fresh fixture still needs a tile")
 	}
 }
+
+func TestAlsoOnLevels(t *testing.T) {
+	w := New("t", "b", 8)
+	w.Cash = 2000
+	if err := w.Build("chipper", Pos{Backyard, 10, 2}); err != nil {
+		t.Fatalf("chipper in the yard: %v", err)
+	}
+	if err := w.Build("compost", Pos{Ground, 20, 7}); err == nil {
+		t.Fatal("compost indoors should be refused")
+	}
+}

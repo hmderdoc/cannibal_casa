@@ -97,7 +97,7 @@ func explain(w *sim.World, f *sim.Fixture) []sim.Line {
 	if e, ok := effects[f.ID]; ok && f.Kind != sim.KindPassive {
 		out = append(out, sim.Line{Kind: "info", Text: e})
 	}
-	where := "Goes anywhere on the " + strings.ToLower(f.Level.String()) + "."
+	where := "Goes anywhere on the " + f.Levels() + "."
 	if f.Front {
 		where = "Goes on the porch."
 	}
