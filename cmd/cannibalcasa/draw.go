@@ -462,15 +462,19 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 		}
 	}
 	y := oy + 1
-	for _, l := range rows {
+	for n, l := range rows {
 		// "dN HH:MM " stamps in gray, the line itself in its kind's color.
+		// The newest entry's stamp blinks so the eye finds it.
 		stamp := 0
 		if strings.HasPrefix(l.Text, "d") {
 			if i := strings.Index(l.Text, ":"); i > 0 && i+3 < len(l.Text) {
 				stamp = i + 4
 			}
 		}
-		if stamp > 0 {
+		if stamp > 0 && n == 0 {
+			b.PrintBlink(ox+2, y, l.Text[:stamp], ui.Col("key"), ui.Black)
+			b.PrintN(ox+2+stamp, y, l.Text[stamp:], w-4-stamp, kindColor(l.Kind), ui.Black)
+		} else if stamp > 0 {
 			b.Print(ox+2, y, l.Text[:stamp], ui.Col("label"), ui.Black)
 			b.PrintN(ox+2+stamp, y, l.Text[stamp:], w-4-stamp, kindColor(l.Kind), ui.Black)
 		} else {

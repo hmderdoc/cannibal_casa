@@ -20,9 +20,10 @@ type Attr struct {
 
 // Cell is one screen position.
 type Cell struct {
-	Ch rune
-	Fg Attr
-	Bg Attr
+	Ch    rune
+	Fg    Attr
+	Bg    Attr
+	Blink bool
 }
 
 // Color depth modes.
@@ -76,6 +77,28 @@ func (b *Buffer) Set(x, y int, ch rune, fg, bg Attr) {
 		return
 	}
 	b.cells[y*b.W+x] = Cell{Ch: ch, Fg: fg, Bg: bg}
+}
+
+// SetBlink is Set with the blink attribute (SGR 5). Use it for one thing at
+// a time: on terminals with iCE colors enabled it reads as a bright
+// background instead of blinking, which is still an accent.
+func (b *Buffer) SetBlink(x, y int, ch rune, fg, bg Attr) {
+	if x < 0 || y < 0 || x >= b.W || y >= b.H {
+		return
+	}
+	b.cells[y*b.W+x] = Cell{Ch: ch, Fg: fg, Bg: bg, Blink: true}
+}
+
+// PrintBlink writes a blinking string and returns the x after it.
+func (b *Buffer) PrintBlink(x, y int, s string, fg, bg Attr) int {
+	for _, ch := range s {
+		if x >= b.W {
+			break
+		}
+		b.SetBlink(x, y, ch, fg, bg)
+		x++
+	}
+	return x
 }
 
 // Get returns the cell at x,y (a blank cell when out of range).
@@ -178,6 +201,7 @@ func (b *Buffer) Flush(w io.Writer) error {
 		out.WriteString("\x1b[0m\x1b[2J\x1b[H")
 	}
 	curFg, curBg := Attr{255, 255}, Attr{255, 255}
+	curBlink := false
 	curX, curY := -1, -1
 	for y := 0; y < b.H; y++ {
 		for x := 0; x < b.W; x++ {
@@ -197,9 +221,9 @@ func (b *Buffer) Flush(w io.Writer) error {
 				out.WriteString(strconv.Itoa(x + 1))
 				out.WriteByte('H')
 			}
-			if c.Fg != curFg || c.Bg != curBg {
-				out.WriteString(b.sgr(c.Fg, c.Bg))
-				curFg, curBg = c.Fg, c.Bg
+			if c.Fg != curFg || c.Bg != curBg || c.Blink != curBlink {
+				out.WriteString(b.sgr(c.Fg, c.Bg, c.Blink))
+				curFg, curBg, curBlink = c.Fg, c.Bg, c.Blink
 			}
 			b.encode(&out, c.Ch)
 			curX, curY = x+1, y
@@ -217,11 +241,15 @@ func (b *Buffer) Flush(w io.Writer) error {
 // sgr builds the color escape for a fg/bg pair in the buffer's depth. In 16
 // color mode bright foregrounds use bold (the portable spelling) and
 // backgrounds are limited to the 8 dark colors, which every BBS terminal has.
-func (b *Buffer) sgr(fg, bg Attr) string {
-	if b.Mode == Mode256 {
-		return "\x1b[0;38;5;" + strconv.Itoa(int(fg.C256)) + ";48;5;" + strconv.Itoa(int(bg.C256)) + "m"
+func (b *Buffer) sgr(fg, bg Attr, blink bool) string {
+	bl := ""
+	if blink {
+		bl = "5;"
 	}
-	s := "\x1b[0;"
+	if b.Mode == Mode256 {
+		return "\x1b[0;" + bl + "38;5;" + strconv.Itoa(int(fg.C256)) + ";48;5;" + strconv.Itoa(int(bg.C256)) + "m"
+	}
+	s := "\x1b[0;" + bl
 	if fg.C16 >= 8 {
 		s += "1;"
 	}

@@ -46,3 +46,18 @@ func TestWallGlyph(t *testing.T) {
 		t.Fatal("wall junctions wrong")
 	}
 }
+
+func TestBlink(t *testing.T) {
+	b := NewBuffer(10, 2)
+	var out bytes.Buffer
+	b.PrintBlink(0, 0, "d1", Yellow, Black)
+	b.Print(2, 0, " x", White, Black)
+	b.Flush(&out)
+	s := out.String()
+	if !strings.Contains(s, "\x1b[0;5;1;33;40md1") {
+		t.Fatalf("blink SGR missing: %q", s)
+	}
+	if !strings.Contains(s, "\x1b[0;37;40m x") {
+		t.Fatalf("blink should reset for the next cell: %q", s)
+	}
+}
