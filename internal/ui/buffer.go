@@ -171,6 +171,25 @@ func (b *Buffer) Box(x, y, w, h int, fg, bg Attr, title string, titleFg Attr) {
 	}
 }
 
+// Frame draws a double-line border without filling or a shadow.
+func (b *Buffer) Frame(x, y, w, h int, fg, bg Attr) {
+	if w < 2 || h < 2 {
+		return
+	}
+	b.Set(x, y, '╔', fg, bg)
+	b.Set(x+w-1, y, '╗', fg, bg)
+	b.Set(x, y+h-1, '╚', fg, bg)
+	b.Set(x+w-1, y+h-1, '╝', fg, bg)
+	for xx := x + 1; xx < x+w-1; xx++ {
+		b.Set(xx, y, '═', fg, bg)
+		b.Set(xx, y+h-1, '═', fg, bg)
+	}
+	for yy := y + 1; yy < y+h-1; yy++ {
+		b.Set(x, yy, '║', fg, bg)
+		b.Set(x+w-1, yy, '║', fg, bg)
+	}
+}
+
 // BoxDouble draws a double-line frame filled with bg, with a title strip
 // across the top edge, and a one-cell shadow to its right and below.
 func (b *Buffer) BoxDouble(x, y, w, h int, fg, bg Attr, title string, titleFg, titleBg Attr) {

@@ -252,6 +252,148 @@ func (a *app) inspectCursor() {
 	}
 }
 
+// quickview is the one-line description of whatever is under the cursor,
+// shown on the map frame so a look doesn't need Enter.
+func (a *app) quickview() string {
+	w := a.w
+	pos := sim.Pos{L: a.level, X: a.cx, Y: a.cy}
+	for _, wk := range w.Workers {
+		if wk.Pos == pos && wk.Away == nil {
+			who := "you"
+			switch wk.Kind {
+			case "renfield":
+				who = "Renfield " + strings.ToLower(sim.RoleName(wk.Role))
+			case "convert":
+				who = "fellow cannibal"
+			}
+			return fmt.Sprintf("%s (%s): %s", wk.Name, who, wk.JobLabel())
+		}
+	}
+	for _, ps := range w.Passers {
+		if ps.Pos == pos {
+			v := sim.VictimByID(ps.Victim)
+			var who []string
+			for _, t := range v.Traits {
+				who = append(who, sim.Traits[t])
+			}
+			state := ""
+			switch ps.State {
+			case "lured":
+				state = ", heading for the porch"
+			case "flee":
+				state = ", running"
+			}
+			return fmt.Sprintf("%s: %s%s", v.Name, strings.Join(who, ", "), state)
+		}
+	}
+	for _, vs := range w.Visitors {
+		if vs.Pos == pos {
+			return capitalize(vs.Name)
+		}
+	}
+	if f := w.FixtureAt(pos); f != nil {
+		return f.Name + ": " + a.fixtureBrief(f)
+	}
+	p := a.plan()
+	switch p.At(a.cx, a.cy) {
+	case '-':
+		return "Sidewalk"
+	case '=':
+		if len(w.Driveway) > 0 && a.cx >= sim.DrivewayX && a.cx < sim.DrivewayX+2*len(w.Driveway) {
+			return "A visitor's car. Evidence, with a license plate."
+		}
+		return "Street"
+	case '+':
+		return "Door"
+	case '>', '<':
+		return "Stairs"
+	case '#':
+		return "Wall"
+	}
+	room := a.level.String()
+	for _, r := range p.Rooms {
+		if a.cy >= r.Y-3 && a.cy <= r.Y+3 && a.cx >= r.X-2 && a.cx <= r.X+18 {
+			room = capitalize(strings.ToLower(r.Name))
+		}
+	}
+	return room + " floor. Enter builds here."
+}
+
+// fixtureBrief is a few words on what a fixture is doing right now.
+func (a *app) fixtureBrief(f *sim.Fixture) string {
+	w := a.w
+	m := w.Machines[f.ID]
+	if m != nil && m.Off {
+		return "switched off"
+	}
+	switch f.Kind {
+	case sim.KindStation:
+		if m != nil && m.Busy > 0 {
+			return "cooking " + sim.RecipeByID(m.Recipe).Name + ", " + minutes(m.Busy) + " left"
+		}
+		if m != nil && m.Output != nil {
+			return sim.RecipeByID(m.Output.Sub).Name + " done, waiting to be plated"
+		}
+		return "idle"
+	case sim.KindDisposal:
+		if m != nil && m.Busy > 0 {
+			return "working on " + m.Item + ", " + minutes(m.Busy) + " left"
+		}
+		return "idle, takes " + strings.Join(f.Accepts, "/")
+	case sim.KindChair:
+		if m != nil && m.Busy > 0 {
+			return "session running, " + minutes(m.Busy) + " left"
+		}
+		return "empty"
+	case sim.KindCell:
+		for _, l := range w.Livestock {
+			if l.Cell == f.ID {
+				state := "fed"
+				if l.Hunger > 50 {
+					state = "hungry"
+				}
+				return fmt.Sprintf("%s the %s, marbling %.1f, %s", l.Name, sim.VictimByID(l.Victim).Name, l.Marbling, state)
+			}
+		}
+		return "empty"
+	case sim.KindContainer:
+		switch f.ID {
+		case "fridge", "fridge_big", "freezer", "chest_freezer":
+			fresh, frozen := fridgeUsed(w)
+			return fmt.Sprintf("%d/%d fresh, %d/%d frozen", fresh, w.FridgeCap(), frozen, w.FreezerCap())
+		case "pantry", "pantry_big":
+			return fmt.Sprintf("%d/%d dishes", len(w.Pantry), w.PantryCap())
+		case "back_step":
+			return fmt.Sprintf("%d bag(s) waiting", len(w.Pile))
+		}
+	case sim.KindPlot:
+		return fmt.Sprintf("%d/%d buried across the yard", w.Buried, w.PlotCap())
+	case sim.KindStand:
+		return fmt.Sprintf("%d/%d items out", len(w.Stand), w.StandCap())
+	case sim.KindTrap:
+		if w.Clock < w.TrapReady {
+			return "resetting"
+		}
+		if freeCells(w) == 0 {
+			return "armed, but no cell is free"
+		}
+		return "armed"
+	case sim.KindLure:
+		var who []string
+		for _, d := range f.Draws {
+			who = append(who, sim.Traits[d])
+		}
+		return "draws " + strings.Join(who, ", ")
+	case sim.KindBed:
+		return "sleep"
+	case sim.KindBlock:
+		return "butchering"
+	case sim.KindVan:
+		return "hauls cars"
+	}
+	return category(f)
+}
+
 // placer is placement mode: the cursor carries a fixture; Enter drops it.
 type placer struct {
 	id   string

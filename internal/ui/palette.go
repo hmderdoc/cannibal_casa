@@ -121,7 +121,11 @@ var Palette = map[string]Attr{
 	"modal_desc":   Attr{0, 234},
 	"modal_hint":   BrightCyan,
 	"calm_bg":      Attr{2, 22},
-	"border":       Blood,
+	"border":       Blood,       // map frame (double line)
+	"border2":      Teal,        // sidebar frame
+	"border3":      Attr{2, 65}, // journal frame
+	"quick":        BrightWhite, // quickview text on the map's bottom edge
+	"quick_bg":     Attr{4, 17},
 	"key":          Yellow,
 	"sel_bg":       Blood,
 	"sel_fg":       BrightWhite,

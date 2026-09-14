@@ -108,7 +108,7 @@ func (a *app) drawMap(ox, oy int) {
 	w := a.w
 	p := a.plan()
 	border := ui.Col("border")
-	b.Box(ox, oy, mapW, mapH, border, ui.Black, "", ui.Black)
+	b.Frame(ox, oy, mapW, mapH, border, ui.Black)
 	// Title strip across the top of the map frame.
 	b.Fill(ox+1, oy, mapW-2, 1, ' ', ui.Col("strip_fg"), ui.Col("strip_bg"))
 	b.Print(ox+2, oy, "CANNIBAL CASA", ui.Col("title"), ui.Col("strip_bg"))
@@ -235,6 +235,14 @@ func (a *app) drawMap(ox, oy int) {
 		}
 		put(wk.Pos, g, col)
 	}
+	// Quickview of what's under the cursor, on the frame's bottom edge.
+	if a.modal == nil {
+		q := " " + a.quickview() + " "
+		if len([]rune(q)) > mapW-4 {
+			q = trunc(q, mapW-4)
+		}
+		b.Print(ox+2, oy+mapH-1, q, ui.Col("quick"), ui.Col("quick_bg"))
+	}
 	// Cursor, or the placement preview.
 	if pl, ok := a.modal.(*placer); ok {
 		f := sim.FixtureByID(pl.id)
@@ -279,7 +287,7 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	if w < 20 {
 		return
 	}
-	b.Box(ox, oy, w, h, ui.Col("border"), ui.Black, "", ui.Black)
+	b.Box(ox, oy, w, h, ui.Col("border2"), ui.Black, "", ui.Black)
 	x, y := ox+2, oy+1
 	iw := w - 4
 	name := s.Cannibal
@@ -439,7 +447,7 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 	if h < 3 {
 		return
 	}
-	b.Box(ox, oy, w, h, ui.Col("border"), ui.Black, "", ui.Black)
+	b.Box(ox, oy, w, h, ui.Col("border3"), ui.Black, "", ui.Black)
 	b.Print(ox+2, oy, " Journal ", ui.Col("strip_fg"), ui.Col("strip_bg"))
 	var lines []sim.Line
 	if a.w != nil {
