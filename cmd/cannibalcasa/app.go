@@ -173,10 +173,27 @@ func (a *app) handleKey(k key) {
 		a.openNeighborhood()
 	case 'o', 'O':
 		a.openOptions()
+	case 'j', 'J':
+		a.toggleJournal()
 	case '?', 'h', 'H':
 		a.openHelp()
 	case keyEsc, 'q', 'Q':
 		a.modal = confirm("Leave the house?", "The machine keeps running while you're gone. The neighbors will assume you're at work.", func(a *app) { a.quit = true })
+	}
+}
+
+// toggleJournal flips the journal between newest-first and reading order.
+// The choice is saved with the world so it follows the caller.
+func (a *app) toggleJournal() {
+	order := "oldest"
+	if a.w.JournalOrder == "oldest" {
+		order = "newest"
+	}
+	a.do(sim.Command{Kind: "journal", Name: order})
+	if order == "oldest" {
+		a.note("info", "Journal: oldest at the top, newest at the bottom. J flips it back.")
+	} else {
+		a.note("info", "Journal: newest at the top. J flips it back.")
 	}
 }
 

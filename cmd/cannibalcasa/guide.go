@@ -53,7 +53,7 @@ var guide = []section{
 	}},
 	{"Keys", []sim.Line{
 		{Kind: "dim", Text: "Arrows / WASD: cursor.  Enter: look at / open whatever is under it.  Tab: next floor.  Space: pause.  1 2 3: speed."},
-		{Kind: "dim", Text: "B build (then place with the cursor).  G go out.  P policy.  L roster and roles.  I inventory.  N the street.  O options.  ? this guide.  Q quit."},
+		{Kind: "dim", Text: "B build (then place with the cursor).  G go out.  P policy.  L roster and roles.  I inventory.  N the street.  J journal order.  O options.  ? this guide.  Q quit."},
 		{Kind: "dim", Text: "On a machine, Enter offers a switch, upgrades, and Move it. Moving is free and instant; workers re-path."},
 	}},
 }

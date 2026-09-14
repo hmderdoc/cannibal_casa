@@ -939,6 +939,9 @@ func (a *app) openOptions() {
 			onSelect: func(a *app) {
 				a.modal = newPrompt("New name", a.w.Cannibal, func(a *app, v string) { a.do(sim.Command{Kind: "rename", Name: v}) })
 			}},
+		{label: "Journal order: " + map[bool]string{true: "oldest at the top", false: "newest at the top"}[a.w.JournalOrder == "oldest"],
+			desc:     []sim.Line{{Kind: "info", Text: "Newest-first keeps the latest event right under the map; reading order runs top to bottom. J toggles it from the map too."}},
+			onSelect: func(a *app) { a.toggleJournal(); a.openOptions() }},
 		{label: "Family history", desc: anc, onSelect: func(a *app) { a.modal = textPanel("The dynasty", anc) }},
 		{label: "Start over from nothing", color: ui.Col("bad"),
 			desc: []sim.Line{{Kind: "warn", Text: "Burns the dynasty down: a new cannibal, the starter kitchen, no fixtures, no ancestors, no cash. Not the same as dying; dying keeps the house."}},

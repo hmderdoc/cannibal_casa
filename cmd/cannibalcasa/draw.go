@@ -461,8 +461,24 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 			rows = append(rows, sim.Line{Kind: lines[i].Kind, Text: pre + ws[j]})
 		}
 	}
+	// Reading order: reverse the block so the newest sits at the bottom. Its
+	// stamped line (the first line of the first entry) lands at lastStamped.
+	newestFirst := a.w == nil || a.w.JournalOrder != "oldest"
+	lastStamped := -1
+	if !newestFirst {
+		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+			rows[i], rows[j] = rows[j], rows[i]
+		}
+		for i := len(rows) - 1; i >= 0; i-- {
+			if strings.HasPrefix(rows[i].Text, "d") && strings.Contains(rows[i].Text, ":") {
+				lastStamped = i
+				break
+			}
+		}
+	}
 	y := oy + 1
 	for n, l := range rows {
+		newest := (newestFirst && n == 0) || (!newestFirst && n == lastStamped)
 		// "dN HH:MM " stamps in gray, the line itself in its kind's color.
 		// The newest entry's stamp blinks so the eye finds it.
 		stamp := 0
@@ -471,7 +487,7 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 				stamp = i + 4
 			}
 		}
-		if stamp > 0 && n == 0 {
+		if stamp > 0 && newest {
 			b.PrintBlink(ox+2, y, l.Text[:stamp], kindColor(l.Kind).Counterpart(), ui.Black)
 			b.PrintN(ox+2+stamp, y, l.Text[stamp:], w-4-stamp, kindColor(l.Kind), ui.Black)
 		} else if stamp > 0 {

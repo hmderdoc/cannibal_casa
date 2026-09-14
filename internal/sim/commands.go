@@ -431,6 +431,7 @@ func (w *World) Reset() {
 	fresh := New(w.Handle, w.BBS, w.Seed*31+w.Clock+7)
 	fresh.Scale = w.Scale
 	fresh.ColorMode = w.ColorMode
+	fresh.JournalOrder = w.JournalOrder
 	fresh.LastWall = w.LastWall
 	old := w.Cannibal
 	*w = *fresh
@@ -489,6 +490,9 @@ func (w *World) Apply(c Command) error {
 		return nil
 	case "color":
 		w.ColorMode = c.Name
+		return nil
+	case "journal":
+		w.JournalOrder = c.Name
 		return nil
 	case "advance":
 		if c.Ticks < 0 || c.Ticks > 4*day {

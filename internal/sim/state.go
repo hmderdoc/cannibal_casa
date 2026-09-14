@@ -271,7 +271,8 @@ type World struct {
 	Seed   int64 `json:"seed"`
 	Step   int64 `json:"step"`
 
-	ColorMode string `json:"color_mode,omitempty"`
+	ColorMode    string `json:"color_mode,omitempty"`
+	JournalOrder string `json:"journal_order,omitempty"` // "" or "newest" = newest first; "oldest" = reading order
 }
 
 const DefaultScale = 60
