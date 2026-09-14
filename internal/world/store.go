@@ -77,6 +77,38 @@ func (st *Store) Load(key string) (*sim.World, error) {
 	if w.Scale <= 0 {
 		w.Scale = sim.DefaultScale
 	}
+	if w.Placed == nil {
+		w.Placed = map[string]sim.Pos{}
+	}
+	// A save from before free placement: give every owned fixture a tile.
+	for id := range w.Fixtures {
+		if _, ok := w.Placed[id]; ok {
+			continue
+		}
+		f := sim.FixtureByID(id)
+		if f == nil {
+			continue
+		}
+		if f.Starter && w.CanPlace(f, f.At) == nil {
+			w.Placed[id] = f.At
+			continue
+		}
+		p := sim.Plans[f.Level]
+		for y := 0; y < len(p.Rows); y++ {
+			placed := false
+			for x := 0; x < len(p.Rows[y]); x++ {
+				at := sim.Pos{L: f.Level, X: x, Y: y}
+				if w.CanPlace(f, at) == nil {
+					w.Placed[id] = at
+					placed = true
+					break
+				}
+			}
+			if placed {
+				break
+			}
+		}
+	}
 	return &w, nil
 }
 
