@@ -424,6 +424,20 @@ func (w *World) Inherit() error {
 	return nil
 }
 
+// Reset burns the dynasty down and starts a brand-new house: new cannibal,
+// starter kitchen, no ancestors, nothing carried over but the clock scale
+// and the color preference.
+func (w *World) Reset() {
+	fresh := New(w.Handle, w.BBS, w.Seed*31+w.Clock+7)
+	fresh.Scale = w.Scale
+	fresh.ColorMode = w.ColorMode
+	fresh.LastWall = w.LastWall
+	old := w.Cannibal
+	*w = *fresh
+	w.say("info", "The old place burned to the foundation. %s moves in and starts over.", w.Cannibal)
+	w.post("info", "'s house changed hands. Whatever happened to %s, the new owner seems nice. Waves a lot.", old)
+}
+
 // Command is the wire form of a player action.
 type Command struct {
 	Kind   string  `json:"kind"` // build | move | toggle | policy | rename | inherit | color | errand | advance
@@ -467,6 +481,9 @@ func (w *World) Apply(c Command) error {
 		return w.Rename(c.Name)
 	case "inherit":
 		return w.Inherit()
+	case "reset":
+		w.Reset()
+		return nil
 	case "color":
 		w.ColorMode = c.Name
 		return nil

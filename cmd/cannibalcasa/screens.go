@@ -939,6 +939,18 @@ func (a *app) openOptions() {
 				a.modal = newPrompt("New name", a.w.Cannibal, func(a *app, v string) { a.do(sim.Command{Kind: "rename", Name: v}) })
 			}},
 		{label: "Family history", desc: anc, onSelect: func(a *app) { a.modal = textPanel("The dynasty", anc) }},
+		{label: "Start over from nothing", color: ui.Col("bad"),
+			desc: []sim.Line{{Kind: "warn", Text: "Burns the dynasty down: a new cannibal, the starter kitchen, no fixtures, no ancestors, no cash. Not the same as dying; dying keeps the house."}},
+			onSelect: func(a *app) {
+				a.modal = confirm("Really start over?", "Everything this family built is gone. The neighbors get a new house to gossip about.",
+					func(a *app) {
+						if a.do(sim.Command{Kind: "reset"}) {
+							a.seenDeath = false
+							a.level = sim.Ground
+							a.note("info", "A fresh start. Same street, new name, empty fridge.")
+						}
+					})
+			}},
 		{label: fmt.Sprintf("Clock: %d game minutes per real minute", a.w.Scale), disabled: true,
 			desc: []sim.Line{{Kind: "info", Text: "Set by the sysop (time_scale in cannibalcasa.ini). The house runs at this rate whether or not you're here."}}},
 	}

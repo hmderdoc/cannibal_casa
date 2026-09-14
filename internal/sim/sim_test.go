@@ -215,3 +215,18 @@ func TestDirectOrders(t *testing.T) {
 		t.Fatalf("the ordered guest was not butchered: %d left", len(w.Livestock))
 	}
 }
+
+func TestReset(t *testing.T) {
+	w := New("t", "b", 5)
+	w.Cash = 900
+	w.Build("cell_2", Pos{Basement, 8, 1})
+	w.Heat = 100
+	w.Advance(3 * 60)
+	w.Inherit()
+	w.ColorMode = "256"
+	w.Reset()
+	if !w.Alive || w.Generation != 1 || len(w.Ancestors) != 0 || w.Has("cell_2") || w.Cash != 150 || w.ColorMode != "256" || w.Handle != "t" {
+		t.Fatalf("reset wrong: gen=%d anc=%d cell2=%v cash=%.0f color=%q", w.Generation, len(w.Ancestors), w.Has("cell_2"), w.Cash, w.ColorMode)
+	}
+	w.Advance(day)
+}
