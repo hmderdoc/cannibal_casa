@@ -362,8 +362,30 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	x2 = statBg(b, x2+2, y, "Cars", fmt.Sprint(cars), pick(cars == 0, ui.Col("good"), ui.Col("bad")), lineBg)
 	statBg(b, x2+2, y, "Buried", fmt.Sprintf("%d/%d", s.Buried, s.PlotCap()), pick(s.Buried >= s.PlotCap() && s.PlotCap() > 0, ui.Col("warn"), ui.Col("text")), lineBg)
 	y++
-	for _, wk := range s.Workers {
+	// You first; then whoever is doing something, most recently started first;
+	// the idle and the asleep sink to the bottom and off the list.
+	workers := append([]*sim.Worker(nil), s.Workers...)
+	sort.SliceStable(workers, func(i, j int) bool {
+		a, b := workers[i], workers[j]
+		if (a.Kind == "cannibal") != (b.Kind == "cannibal") {
+			return a.Kind == "cannibal"
+		}
+		if a.Busy() != b.Busy() {
+			return a.Busy()
+		}
+		if a.Away != nil && b.Away == nil {
+			return true
+		}
+		return a.Active > b.Active
+	})
+	rows := oy + h - 2 - y
+	for i, wk := range workers {
 		if y >= oy+h-2 {
+			break
+		}
+		if i == rows-1 && len(workers) > rows {
+			b.PrintN(x, y, fmt.Sprintf("+%d more (L for the roster)", len(workers)-i), iw, ui.Col("label"), ui.Black)
+			y++
 			break
 		}
 		g := "@"

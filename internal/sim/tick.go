@@ -440,6 +440,9 @@ func (w *World) tickWorkers() {
 				if wk.Job != nil {
 					wk.Path = Path(wk.Pos, wk.Job.Steps[0].Dest)
 					wk.Job.Timer = wk.Job.Steps[0].Work
+					if wk.Busy() {
+						wk.Active = w.Clock
+					}
 				}
 			}
 			continue

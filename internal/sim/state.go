@@ -69,8 +69,17 @@ type Worker struct {
 	Carry    []Item  `json:"carry,omitempty"`
 	Job      *Job    `json:"job,omitempty"`
 	Away     *Errand `json:"away,omitempty"`
-	Role     string  `json:"role,omitempty"`  // Renfields: hand | cook | guard | shill | gimp
-	Meals    int     `json:"meals,omitempty"` // human dishes eaten; enough of them and a Renfield converts
+	Role     string  `json:"role,omitempty"`   // Renfields: hand | cook | guard | shill | gimp
+	Meals    int     `json:"meals,omitempty"`  // human dishes eaten; enough of them and a Renfield converts
+	Active   int64   `json:"active,omitempty"` // clock of the last real job (not idling or sleeping)
+}
+
+// Busy reports whether a worker is doing something worth watching.
+func (wk *Worker) Busy() bool {
+	if wk.Asleep || wk.Job == nil {
+		return false
+	}
+	return wk.Job.Kind != "idle" && wk.Job.Kind != "sleep"
 }
 
 // ConvertMeals is how many dishes it takes before a Renfield asks for
