@@ -182,3 +182,36 @@ func (w *World) freeTile(f *Fixture) Pos {
 	}
 	return Pos{}
 }
+
+func TestDirectOrders(t *testing.T) {
+	w := New("t", "b", 21)
+	w.Cash = 2000
+	w.Build("chair", Pos{Ground, 20, 11})
+	w.Build("cot", Pos{Attic, 3, 1})
+	w.Build("cell_2", Pos{Basement, 8, 1})
+	w.Policy.Brainwash = false
+	w.Policy.ButcherMarbling = 5
+	w.Livestock = append(w.Livestock,
+		&Livestock{ID: w.newID(), Victim: "crossfit", Name: "A", Cell: "cell_1", Marbling: 1, Since: w.Clock},
+		&Livestock{ID: w.newID(), Victim: "mlm", Name: "B", Cell: "cell_2", Marbling: 3, Since: w.Clock})
+	if err := w.Order(w.Livestock[0].ID, "chair"); err != nil {
+		t.Fatal(err)
+	}
+	w.Advance(16 * 60)
+	renfield := false
+	for _, wk := range w.Workers {
+		if wk.Name == "A" && wk.Kind == "renfield" {
+			renfield = true
+		}
+	}
+	if !renfield {
+		t.Fatalf("the ordered guest never became a Renfield: workers=%d livestock=%d chair=%+v", len(w.Workers), len(w.Livestock), w.Machines["chair"])
+	}
+	if err := w.Order(w.Livestock[0].ID, "butcher"); err != nil {
+		t.Fatal(err)
+	}
+	w.Advance(6 * 60)
+	if len(w.Livestock) != 0 {
+		t.Fatalf("the ordered guest was not butchered: %d left", len(w.Livestock))
+	}
+}

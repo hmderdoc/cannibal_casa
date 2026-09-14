@@ -331,6 +331,37 @@ func (w *World) SetPolicy(p Policy) {
 	w.Policy = p
 }
 
+// Order gives one guest a direct instruction: "chair", "butcher", or "" to
+// go back to policy. The next free worker carries it out.
+func (w *World) Order(id int, order string) error {
+	switch order {
+	case "", "chair", "butcher":
+	default:
+		return errors.New("no such order")
+	}
+	if order == "chair" && !w.Has("chair") {
+		return errors.New("you don't have The Chair")
+	}
+	l := w.livestockByID(id)
+	if l == nil || l.Cell == "" {
+		return errors.New("no such guest, or they're already being moved")
+	}
+	l.Order = order
+	switch order {
+	case "chair":
+		if w.Renfields() >= w.CotCount() {
+			w.say("warn", "%s is marked for The Chair, but every cot is taken. Build one in the attic.", l.Name)
+		} else {
+			w.say("info", "%s is next for The Chair.", l.Name)
+		}
+	case "butcher":
+		w.say("info", "%s is next for the block.", l.Name)
+	default:
+		w.say("info", "%s goes back to being livestock like anybody else.", l.Name)
+	}
+	return nil
+}
+
 // SetRole assigns a Renfield a form of servitude.
 func (w *World) SetRole(id int, role string) error {
 	if RoleName(role) == "Hand" && role != RoleHand {
@@ -422,6 +453,8 @@ func (w *World) Apply(c Command) error {
 		return w.StartErrand(c.Name)
 	case "role":
 		return w.SetRole(c.ID, c.Name)
+	case "order":
+		return w.Order(c.ID, c.Name)
 	case "toggle":
 		return w.Toggle(c.Name)
 	case "policy":

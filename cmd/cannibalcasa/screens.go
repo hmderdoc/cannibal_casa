@@ -407,6 +407,8 @@ func (a *app) openFixture(f *sim.Fixture) {
 		}
 	}
 	if f.ID == "chair" {
+		items = append(items, item{label: "Put someone in it...", color: ui.Col("fix_closet"), desc: append([]sim.Line{{Kind: "info", Text: "Pick a guest from the cells for the next session."}}, status...),
+			onSelect: func(a *app) { a.openChairPicker() }})
 		items = append(items, item{label: "Policy: brainwashing " + onOff(a.w.Policy.Brainwash), desc: status, onSelect: func(a *app) { a.openPolicy() }})
 	}
 	items = append(items, item{label: "Move it", color: ui.Col("key"), desc: append([]sim.Line{{Kind: "info", Text: "Pick it up and put it somewhere closer to whatever it works with. Workers walk; distance is throughput."}}, status...),
@@ -695,10 +697,32 @@ func (a *app) openRoster() {
 		if l.Hunger > 50 {
 			col = ui.Col("heat_hi")
 		}
-		items = append(items, item{label: fmt.Sprintf("%-10s %-28s %-7s marb %.1f hunger %3.0f", l.Name, trunc(v.Name, 28), where, l.Marbling, l.Hunger), color: col,
-			desc: []sim.Line{{Kind: "dim", Text: v.Flavor}, {Kind: "info", Text: fmt.Sprintf("Fight %d. Processed at marbling %d per policy.", v.Fight, w.Policy.ButcherMarbling)}}})
+		l := l
+		if l.Order != "" {
+			where += " *" + l.Order
+		}
+		items = append(items, item{label: fmt.Sprintf("%-10s %-28s %-12s marb %.1f hunger %3.0f", l.Name, trunc(v.Name, 28), where, l.Marbling, l.Hunger), color: col,
+			desc:     []sim.Line{{Kind: "dim", Text: v.Flavor}, {Kind: "info", Text: fmt.Sprintf("Fight %d. Processed at marbling %d per policy. Enter: give a direct order.", v.Fight, w.Policy.ButcherMarbling)}},
+			onSelect: func(a *app) { a.openOrders(l) }})
 	}
 	a.modal = newMenu("Roster", items)
+}
+
+func (a *app) openOrders(l *sim.Livestock) {
+	v := sim.VictimByID(l.Victim)
+	give := func(order string) func(a *app) {
+		return func(a *app) {
+			if a.do(sim.Command{Kind: "order", ID: l.ID, Name: order}) {
+				a.openRoster()
+			}
+		}
+	}
+	items := []item{
+		{label: "Send to The Chair", color: ui.Col("fix_closet"), desc: []sim.Line{{Kind: "info", Text: "The next free worker walks them to The Chair. Needs The Chair and a free cot; ignores the brainwashing policy."}}, onSelect: give("chair")},
+		{label: "Butcher now", color: ui.Col("food"), desc: []sim.Line{{Kind: "info", Text: "The next free worker takes them to the block, whatever their marbling."}}, onSelect: give("butcher")},
+		{label: "Back to policy", desc: []sim.Line{{Kind: "info", Text: "Clear any order; policy decides."}}, onSelect: give("")},
+	}
+	a.modal = newMenu(fmt.Sprintf("%s the %s", l.Name, v.Name), items)
 }
 
 func (a *app) openRoles(wk *sim.Worker) {
@@ -717,6 +741,25 @@ func (a *app) openRoles(wk *sim.Worker) {
 			}})
 	}
 	a.modal = newMenu("What is "+wk.Name+" for?", items)
+}
+
+func (a *app) openChairPicker() {
+	var items []item
+	for _, l := range a.w.Livestock {
+		l := l
+		if l.Cell == "" {
+			continue
+		}
+		v := sim.VictimByID(l.Victim)
+		items = append(items, item{label: fmt.Sprintf("%-10s %-28s fight %d  marbling %.1f", l.Name, trunc(v.Name, 28), v.Fight, l.Marbling), color: ui.Col(v.Color),
+			desc: []sim.Line{{Kind: "dim", Text: v.Flavor}},
+			onSelect: func(a *app) {
+				if a.do(sim.Command{Kind: "order", ID: l.ID, Name: "chair"}) {
+					a.modal = nil
+				}
+			}})
+	}
+	a.modal = newMenu("Who goes in The Chair?", items)
 }
 
 func (a *app) openInventory() {

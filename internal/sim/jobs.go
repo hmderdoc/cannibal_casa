@@ -26,6 +26,17 @@ func (w *World) pickJob(wk *Worker) *Job {
 			return j
 		}
 	}
+	// A direct order from the player comes before routine work.
+	if w.hasOrder("chair") {
+		if j := w.jobBrainwash(wk); j != nil {
+			return j
+		}
+	}
+	if w.hasOrder("butcher") {
+		if j := w.jobButcher(wk); j != nil {
+			return j
+		}
+	}
 	order := []func(*Worker) *Job{w.jobFeed, w.jobCollect, w.jobDispose, w.jobButcher, w.jobCookAny, w.jobStock, w.jobBrainwash}
 	switch wk.Role {
 	case RoleCook:
@@ -183,13 +194,20 @@ func (w *World) jobButcher(wk *Worker) *Job {
 	if w.FridgeCap()-fresh < 4 && !(w.Policy.Freeze && w.FreezerCap()-w.frozenCount() >= 4) {
 		return nil
 	}
-	if len(w.Livestock) <= w.Policy.KeepLivestock {
+	if len(w.Livestock) <= w.Policy.KeepLivestock && !w.hasOrder("butcher") {
 		return nil
 	}
 	full := w.freeCell() == ""
 	var pick *Livestock
 	for _, l := range w.Livestock {
 		if l.Cell == "" || w.targeted(l.ID) {
+			continue
+		}
+		if l.Order == "butcher" {
+			pick = l
+			break
+		}
+		if l.Order != "" {
 			continue
 		}
 		ready := int(l.Marbling) >= w.Policy.ButcherMarbling || (full && w.Policy.ButcherWhenFull) || l.Hunger >= 100
@@ -354,7 +372,7 @@ func (w *World) jobStock(wk *Worker) *Job {
 }
 
 func (w *World) jobBrainwash(wk *Worker) *Job {
-	if !w.Policy.Brainwash || !w.Has("chair") {
+	if !w.Has("chair") || (!w.Policy.Brainwash && !w.hasOrder("chair")) {
 		return nil
 	}
 	m := w.machine("chair")
@@ -364,6 +382,13 @@ func (w *World) jobBrainwash(wk *Worker) *Job {
 	var pick *Livestock
 	for _, l := range w.Livestock {
 		if l.Cell == "" || w.targeted(l.ID) {
+			continue
+		}
+		if l.Order == "chair" {
+			pick = l
+			break
+		}
+		if l.Order != "" || !w.Policy.Brainwash {
 			continue
 		}
 		if pick == nil || VictimByID(l.Victim).Fight < VictimByID(pick.Victim).Fight {
@@ -376,6 +401,15 @@ func (w *World) jobBrainwash(wk *Worker) *Job {
 	m.Reserved = true
 	return &Job{Kind: "brainwash", Label: "walking " + pick.Name + " to The Chair", Target: pick.ID, Machine: "chair",
 		Steps: []Step{w.stepTo(pick.Cell, 2, "take_livestock"), w.stepTo("chair", 5, "load_chair")}}
+}
+
+func (w *World) hasOrder(order string) bool {
+	for _, l := range w.Livestock {
+		if l.Order == order && l.Cell != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *World) jobIdle(wk *Worker) *Job {

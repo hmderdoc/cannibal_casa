@@ -29,7 +29,8 @@ type Livestock struct {
 	Hunger   float64 `json:"hunger"` // 0 fed .. 100 starving
 	Marbling float64 `json:"marbling"`
 	Since    int64   `json:"since"`
-	Starve   int     `json:"starve"` // minutes at 100 hunger
+	Starve   int     `json:"starve"`          // minutes at 100 hunger
+	Order    string  `json:"order,omitempty"` // a direct order: chair | butcher
 }
 
 // Step is one leg of a Job: walk to Dest, work for Work minutes, then Do.
