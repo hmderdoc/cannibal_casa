@@ -547,12 +547,19 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		m := w.machine(j.Machine)
 		m.Reserved = false
 		f := FixtureByID(j.Machine)
-		if m.Busy > 0 || len(wk.Carry) == 0 {
+		ei := -1
+		for i, c := range wk.Carry {
+			if c.Kind == "evidence" && contains(f.Accepts, c.Sub) {
+				ei = i
+				break
+			}
+		}
+		if m.Busy > 0 || ei < 0 {
 			w.dropBack(wk)
 			return false
 		}
-		e := wk.Carry[0]
-		wk.Carry = wk.Carry[1:]
+		e := wk.Carry[ei]
+		wk.Carry = append(wk.Carry[:ei], wk.Carry[ei+1:]...)
 		m.Busy = f.Duration
 		m.Item = e.Sub
 		m.Uses++
@@ -564,11 +571,18 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 	case "bury":
 		m := w.machine(j.Machine)
 		m.Reserved = false
-		if len(wk.Carry) == 0 || w.Buried >= w.PlotCap() {
+		ei := -1
+		for i, c := range wk.Carry {
+			if c.Kind == "evidence" {
+				ei = i
+				break
+			}
+		}
+		if ei < 0 || w.Buried >= w.PlotCap() {
 			w.dropBack(wk)
 			return false
 		}
-		wk.Carry = wk.Carry[1:]
+		wk.Carry = append(wk.Carry[:ei], wk.Carry[ei+1:]...)
 		w.Buried++
 		w.Stats.Buried++
 		if !w.Has("shed") && w.IsNight() {

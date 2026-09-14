@@ -252,3 +252,48 @@ func TestAlsoOnLevels(t *testing.T) {
 		t.Fatal("compost indoors should be refused")
 	}
 }
+
+// Assigning a role mid-carry must not lose the guest, and a stranded guest is
+// rescued by the hourly sweep.
+func TestRoleChangeDropsCarry(t *testing.T) {
+	w := New("t", "b", 12)
+	w.Cash = 2000
+	w.Build("chair", Pos{Ground, 20, 11})
+	w.Build("cot", Pos{Attic, 3, 1})
+	w.Build("cot_2", Pos{Attic, 5, 1}) // one for R, one for the guest
+	w.Build("chipper", Pos{Backyard, 10, 2})
+	r := &Worker{ID: w.newID(), Name: "R", Kind: "renfield", Pos: w.Pos("cell_1"), Hunger: 80, Energy: 80, Loyalty: 80}
+	w.Workers = append(w.Workers, r)
+	l := &Livestock{ID: w.newID(), Victim: "mlm", Name: "T", Cell: "cell_1", Marbling: 3, Since: w.Clock}
+	w.Livestock = append(w.Livestock, l)
+	w.Pile = append(w.Pile, Item{ID: w.newID(), Kind: "evidence", Sub: "bones", Born: w.Clock})
+	if err := w.Order(l.ID, "chair"); err != nil {
+		t.Fatal(err)
+	}
+	// Let the Renfield pick up the guest, then reassign her mid-carry.
+	for i := 0; i < 400 && l.Cell != ""; i++ {
+		w.Advance(1)
+	}
+	if l.Cell != "" {
+		t.Fatal("guest never picked up")
+	}
+	w.SetRole(r.ID, RoleCook)
+	w.Advance(3 * 60)
+	found := l.Cell != ""
+	if m := w.Machines["chair"]; m != nil && m.Load == l.ID {
+		found = true
+	}
+	for _, wk := range w.Workers {
+		for _, c := range wk.Carry {
+			if c.Kind == "livestock" && c.Ref == l.ID {
+				found = true
+			}
+		}
+	}
+	if !found && w.livestockByID(l.ID) != nil {
+		t.Fatalf("guest stranded: cell=%q chair=%+v", l.Cell, w.Machines["chair"])
+	}
+	if m := w.Machines["chipper"]; m != nil && m.Item == "" && m.Busy > 0 {
+		t.Fatal("the chipper ate something that wasn't a bag")
+	}
+}

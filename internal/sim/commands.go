@@ -370,6 +370,8 @@ func (w *World) SetRole(id int, role string) error {
 	for _, wk := range w.Workers {
 		if wk.ID == id && wk.Kind != "cannibal" {
 			wk.Role = role
+			w.dropBack(wk) // put down whatever they were carrying before the job goes away
+			w.unreserve(jobMachine(wk))
 			wk.Job = nil
 			wk.Path = nil
 			w.say("info", "%s is now the %s.", wk.Name, strings.ToLower(RoleName(role)))

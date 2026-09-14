@@ -62,6 +62,7 @@ func (w *World) tick() {
 	}
 	if w.Clock%60 == 0 {
 		w.hourly()
+		w.sweep()
 	}
 	if w.Clock%day == 6*60 {
 		w.daily()
@@ -807,6 +808,67 @@ func (w *World) hourly() {
 				w.say("good", "The neighbors came for %s. They asked for the recipe. Heat -%.0f, +%d stars.", RecipeByID(d.Sub).Name, drop, d.Quality)
 				w.post("good", "hosted a dinner party. \"Best %s on the street,\" said Gladys, licking the plate.", strings.ToLower(RecipeByID(d.Sub).Name))
 				break
+			}
+		}
+	}
+}
+
+// sweep repairs the two ways a house can quietly wedge: a machine reserved
+// by a job nobody holds any more, and a guest out of their cell whom nobody
+// is carrying and who isn't in the chair.
+func (w *World) sweep() {
+	for id, m := range w.Machines {
+		if !m.Reserved {
+			continue
+		}
+		held := false
+		for _, wk := range w.Workers {
+			if wk.Job != nil && wk.Job.Machine == id {
+				held = true
+				break
+			}
+		}
+		if !held {
+			m.Reserved = false
+		}
+	}
+	chair := w.Machines["chair"]
+	for _, l := range w.Livestock {
+		if l.Cell != "" || (chair != nil && chair.Load == l.ID) {
+			continue
+		}
+		carried := false
+		for _, wk := range w.Workers {
+			for _, c := range wk.Carry {
+				if c.Kind == "livestock" && c.Ref == l.ID {
+					carried = true
+				}
+			}
+		}
+		if carried {
+			continue
+		}
+		switch {
+		case l.Order == "chair" && w.Has("chair") && chair != nil && chair.Busy == 0 && chair.Load == 0 && !chair.Off && w.Renfields() < w.CotCount():
+			chair.Load = l.ID
+			chair.Busy = FixtureByID("chair").Duration
+			if w.Has("vhs") {
+				chair.Busy /= 2
+			}
+			chair.Uses++
+			w.say("info", "%s was found wandering the hall and strapped into The Chair.", l.Name)
+		default:
+			if cell := w.freeCell(); cell != "" {
+				l.Cell = cell
+				w.say("warn", "%s was found wandering the hall and put back in %s.", l.Name, FixtureByID(cell).Name)
+			} else {
+				w.say("warn", "%s was found wandering the hall with no cell to go back to. Straight to the block.", l.Name)
+				p := w.Player()
+				if p == nil {
+					p = w.Workers[0]
+				}
+				p.Carry = append(p.Carry, Item{ID: w.newID(), Kind: "livestock", Ref: l.ID, Victim: l.Victim})
+				w.dropBack(p)
 			}
 		}
 	}
