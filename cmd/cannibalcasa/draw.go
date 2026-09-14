@@ -362,6 +362,33 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	x2 = statBg(b, x2+2, y, "Cars", fmt.Sprint(cars), pick(cars == 0, ui.Col("good"), ui.Col("bad")), lineBg)
 	statBg(b, x2+2, y, "Buried", fmt.Sprintf("%d/%d", s.Buried, s.PlotCap()), pick(s.Buried >= s.PlotCap() && s.PlotCap() > 0, ui.Col("warn"), ui.Col("text")), lineBg)
 	y++
+	alert := ""
+	alertCol := ui.Col("warn")
+	for _, vs := range s.Visitors {
+		switch vs.Kind {
+		case "police":
+			alert, alertCol = "THE FBI IS HERE", ui.Col("bad")
+		case "inspector":
+			if alert == "" {
+				alert = "VISITOR AT THE DOOR"
+			}
+		case "dog":
+			if alert == "" {
+				alert = "dog in the yard"
+			}
+		}
+	}
+	if alert == "" {
+		for _, ps := range s.Passers {
+			if ps.State == "lured" {
+				alert, alertCol = "someone's on the porch...", ui.Col("good")
+			}
+		}
+	}
+	limit := oy + h - 1 // exclusive: the last inner row is oy+h-2
+	if alert != "" {
+		limit-- // keep the bottom row for the alert
+	}
 	// You first; then whoever is doing something, most recently started first;
 	// the idle and the asleep sink to the bottom and off the list.
 	workers := append([]*sim.Worker(nil), s.Workers...)
@@ -378,9 +405,9 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 		}
 		return a.Active > b.Active
 	})
-	rows := oy + h - 2 - y
+	rows := limit - y
 	for i, wk := range workers {
-		if y >= oy+h-2 {
+		if y >= limit {
 			break
 		}
 		if i == rows-1 && len(workers) > rows {
@@ -405,35 +432,12 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 		b.PrintN(x, y, trunc(fmt.Sprintf("%s %s: %s", g, firstName(wk.Name), label), iw), iw, col, ui.Black)
 		y++
 	}
-	alert := ""
-	alertCol := ui.Col("warn")
-	for _, vs := range s.Visitors {
-		switch vs.Kind {
-		case "police":
-			alert, alertCol = "THE FBI IS HERE", ui.Col("bad")
-		case "inspector":
-			if alert == "" {
-				alert = "VISITOR AT THE DOOR"
-			}
-		case "dog":
-			if alert == "" {
-				alert = "dog in the yard"
-			}
-		}
-	}
-	if alert == "" {
-		for _, ps := range s.Passers {
-			if ps.State == "lured" {
-				alert, alertCol = "someone's on the porch...", ui.Col("good")
-			}
-		}
-	}
-	if alert != "" && y < oy+h-1 {
+	if alert != "" {
 		bg := ui.Col("alert_bg")
 		if alertCol == ui.Col("good") {
 			bg = ui.Col("calm_bg")
 		}
-		b.PrintN(x, y, " "+alert, iw, ui.Col("strip_fg"), bg)
+		b.PrintN(x, oy+h-2, " "+alert, iw, ui.Col("strip_fg"), bg)
 	}
 }
 
