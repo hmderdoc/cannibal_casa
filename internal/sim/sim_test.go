@@ -230,3 +230,14 @@ func TestReset(t *testing.T) {
 	}
 	w.Advance(day)
 }
+
+func TestUpgradeCommandNeedsNoTile(t *testing.T) {
+	w := New("t", "b", 2)
+	w.Cash = 1000
+	if err := w.Apply(Command{Kind: "build", Name: "trapdoor_pro"}); err != nil {
+		t.Fatalf("in-place upgrade without a tile: %v", err)
+	}
+	if err := w.Apply(Command{Kind: "build", Name: "lure_couch"}); err == nil {
+		t.Fatal("a fresh fixture still needs a tile")
+	}
+}

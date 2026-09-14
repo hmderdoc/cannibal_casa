@@ -454,10 +454,13 @@ type Command struct {
 func (w *World) Apply(c Command) error {
 	switch c.Kind {
 	case "build":
-		if c.At == nil {
+		at := Pos{}
+		if c.At != nil {
+			at = *c.At
+		} else if replaces[c.Name] == "" || !w.Has(replaces[c.Name]) {
 			return errors.New("build needs a tile")
 		}
-		return w.Build(c.Name, *c.At)
+		return w.Build(c.Name, at)
 	case "move":
 		if c.At == nil {
 			return errors.New("move needs a tile")
