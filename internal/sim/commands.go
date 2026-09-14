@@ -157,7 +157,7 @@ func (w *World) StartErrand(kind string) error {
 			chance -= 15
 		}
 		if r.Intn(100) < clamp(chance, 10, 90) {
-			name := captiveNames[r.Intn(len(captiveNames))]
+			name := pickName(v, r)
 			e.Livestock = &Livestock{ID: w.newID(), Victim: v.ID, Name: name, Marbling: float64(v.Marbling), Since: e.Until}
 			e.Cash = v.Loot
 			e.Heat = 2
@@ -220,7 +220,7 @@ func (w *World) autoHunt(wk *Worker) {
 	v := w.rollVictim(r)
 	e := &Errand{Kind: "hunt", Label: "out hunting, on their own", Until: w.Clock + 4*60, TextKind: "info"}
 	if r.Intn(100) < clamp(w.trapChance(v)+5, 10, 85) {
-		name := captiveNames[r.Intn(len(captiveNames))]
+		name := pickName(v, r)
 		e.Livestock = &Livestock{ID: w.newID(), Victim: v.ID, Name: name, Marbling: float64(v.Marbling), Since: e.Until}
 		e.Cash = v.Loot
 		e.Heat = 2

@@ -6,7 +6,10 @@
 // watching: an absence is just elapsed wall-clock time to catch up on.
 package sim
 
-import "strings"
+import (
+	"math/rand"
+	"strings"
+)
 
 // Victim is an archetype of suburban adult who will not be missed (much).
 type Victim struct {
@@ -25,23 +28,24 @@ type Victim struct {
 	Night       bool     // only out after dark
 	Drives      bool     // leaves a car at the curb
 	Loot        int      // cash in their wallet
+	Gender      string   // "m", "f", or "" for either
 	Flavor      string
 }
 
 var Victims = []Victim{
-	{ID: "solar", Name: "Door-to-Door Solar Salesman", Glyph: 's', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 14, HeatMissing: 5, Weight: 12, Traits: []string{"nosy"},
+	{ID: "solar", Name: "Door-to-Door Solar Salesman", Glyph: 's', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 14, HeatMissing: 5, Weight: 12, Gender: "m", Traits: []string{"nosy"},
 		Drives: true, Loot: 20,
 		Flavor: "Nobody has ever missed one. His company thinks he quit. His mother thinks he's in Tucson."},
-	{ID: "mlm", Name: "MLM Hun", Glyph: 'm', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 10, HeatMissing: 6, Weight: 10, Traits: []string{"online", "bargain"},
+	{ID: "mlm", Name: "MLM Hun", Glyph: 'm', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 10, HeatMissing: 6, Weight: 10, Gender: "f", Traits: []string{"online", "bargain"},
 		Loot:   15,
 		Flavor: "Hey hun!! Quick question, would you like to join my downline? No. Would you like to join my dinner?"},
-	{ID: "techbro", Name: "Tech Bro", Glyph: 't', Color: "victim_prime", Marbling: 5, Fight: 2, NoticeDays: 5, HeatMissing: 15, Weight: 8, Traits: []string{"online", "freebie"},
+	{ID: "techbro", Name: "Tech Bro", Glyph: 't', Color: "victim_prime", Marbling: 5, Fight: 2, NoticeDays: 5, HeatMissing: 15, Weight: 8, Gender: "m", Traits: []string{"online", "freebie"},
 		Drives: true, Loot: 80,
 		Flavor: "Keto, intermittent fasting, grass-fed everything. Beautifully marbled. Insufferable, even now."},
 	{ID: "vegan", Name: "Militant Vegan", Glyph: 'v', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 6, HeatMissing: 10, Weight: 8, Traits: []string{"bargain", "wellness"},
 		Loot:   10,
 		Flavor: "Grass-fed, free-range, no antibiotics. Premium. The irony is the seasoning."},
-	{ID: "crossfit", Name: "CrossFit Guy", Glyph: 'c', Color: "victim_hard", Marbling: 1, Fight: 5, NoticeDays: 3, HeatMissing: 12, Weight: 7, Traits: []string{"freebie", "wellness"},
+	{ID: "crossfit", Name: "CrossFit Guy", Glyph: 'c', Color: "victim_hard", Marbling: 1, Fight: 5, NoticeDays: 3, HeatMissing: 12, Weight: 7, Gender: "m", Traits: []string{"freebie", "wellness"},
 		Loot:   12,
 		Flavor: "Lean. Fights back. Will tell you about his WOD from inside the cell."},
 	{ID: "jogger", Name: "3 A.M. Jogger", Glyph: 'j', Color: "victim_hard", Marbling: 2, Fight: 3, NoticeDays: 4, HeatMissing: 10, Weight: 9, Traits: []string{"wellness"}, Night: true,
@@ -50,42 +54,42 @@ var Victims = []Victim{
 	{ID: "delivery", Name: "Package Delivery Driver", Glyph: 'd', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 3, HeatMissing: 14, Weight: 8, Traits: []string{"traveler"},
 		Drives: true, Loot: 8,
 		Flavor: "Fast, tired, on a schedule. The packages will keep coming. The packages will pile up."},
-	{ID: "missionary", Name: "Missionary", Glyph: 'M', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 9, HeatMissing: 12, Weight: 6, Traits: []string{"nosy", "freebie"}, Pair: true,
+	{ID: "missionary", Name: "Missionary", Glyph: 'M', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 9, HeatMissing: 12, Weight: 6, Gender: "m", Traits: []string{"nosy", "freebie"}, Pair: true,
 		Loot:   5,
 		Flavor: "They travel in pairs. Two for one. They knocked. You answered. Everyone's day changed."},
-	{ID: "influencer", Name: "Lifestyle Influencer", Glyph: 'i', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 7, HeatMissing: 22, Weight: 6, Traits: []string{"wellness", "traveler"},
+	{ID: "influencer", Name: "Lifestyle Influencer", Glyph: 'i', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 7, HeatMissing: 22, Weight: 6, Gender: "f", Traits: []string{"wellness", "traveler"},
 		Drives: true, Loot: 45,
 		Flavor: "Her followers assumed a digital detox. On day seven they assumed the worst and were correct."},
-	{ID: "karen", Name: "Wants To Speak To The Manager", Glyph: 'K', Color: "victim_hard", Marbling: 3, Fight: 3, NoticeDays: 5, HeatMissing: 12, Weight: 7, Traits: []string{"bargain", "nosy"},
+	{ID: "karen", Name: "Wants To Speak To The Manager", Glyph: 'K', Color: "victim_hard", Marbling: 3, Fight: 3, NoticeDays: 5, HeatMissing: 12, Weight: 7, Gender: "f", Traits: []string{"bargain", "nosy"},
 		Drives: true, Loot: 35,
 		Flavor: "You are the manager. You are also the butcher. She had notes on both."},
-	{ID: "landlord", Name: "Landlord", Glyph: 'L', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 20, HeatMissing: 3, Weight: 5, Traits: []string{"traveler", "bargain"},
+	{ID: "landlord", Name: "Landlord", Glyph: 'L', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 20, HeatMissing: 3, Weight: 5, Gender: "m", Traits: []string{"traveler", "bargain"},
 		Drives: true, Loot: 90,
 		Flavor: "His tenants threw a party. Nobody has checked on him and nobody will."},
-	{ID: "crypto", Name: "Crypto Evangelist", Glyph: '$', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 8, HeatMissing: 8, Weight: 6, Traits: []string{"online", "freebie"},
+	{ID: "crypto", Name: "Crypto Evangelist", Glyph: '$', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 8, HeatMissing: 8, Weight: 6, Gender: "m", Traits: []string{"online", "freebie"},
 		Loot:   120,
 		Flavor: "All that steakhouse networking. Marbled like a portfolio, and the portfolio was also fake."},
-	{ID: "hoa", Name: "HOA Inspector", Glyph: 'H', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 2, HeatMissing: 20, Weight: 4, Traits: []string{"nosy"}, Drives: true,
+	{ID: "hoa", Name: "HOA Inspector", Glyph: 'H', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 2, HeatMissing: 20, Weight: 4, Gender: "m", Traits: []string{"nosy"}, Drives: true,
 		Flavor: "Cited your mailbox. Cited your hedge. Did not cite the basement, because he never got that far."},
 	{ID: "podcaster", Name: "True Crime Podcaster", Glyph: 'P', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 4, HeatMissing: -20, Weight: 3, Traits: []string{"nosy"},
 		Flavor: "Came to the street chasing a story. The final episode was mysteriously never recorded. Downloads went way up."},
-	{ID: "cop", Name: "Retired Cop", Glyph: 'R', Color: "victim_hard", Marbling: 3, Fight: 4, NoticeDays: 2, HeatMissing: 25, Weight: 4, Traits: []string{"nosy"}, Drives: true, Loot: 10,
+	{ID: "cop", Name: "Retired Cop", Glyph: 'R', Color: "victim_hard", Marbling: 3, Fight: 4, NoticeDays: 2, HeatMissing: 25, Weight: 4, Gender: "m", Traits: []string{"nosy"}, Drives: true, Loot: 10,
 		Flavor: "Still has the mustache. Still has the flashlight. Does not, it turns out, still have the reflexes."},
-	{ID: "yoga", Name: "Yoga Instructor", Glyph: 'y', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 6, HeatMissing: 10, Weight: 6, Traits: []string{"wellness"}, Loot: 15,
+	{ID: "yoga", Name: "Yoga Instructor", Glyph: 'y', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 6, HeatMissing: 10, Weight: 6, Gender: "f", Traits: []string{"wellness"}, Loot: 15,
 		Flavor: "Flexible. Hydrated. Says 'namaste' to the trapdoor on the way down."},
 	{ID: "tourist", Name: "Lost Tourist", Glyph: 'T', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 30, HeatMissing: 2, Weight: 5, Traits: []string{"traveler", "online"}, Loot: 60,
 		Flavor: "Asked for directions to the beach. There is no beach. There is now a tourist."},
-	{ID: "bachelorette", Name: "Bachelorette Party", Glyph: 'B', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 2, HeatMissing: 18, Weight: 3, Traits: []string{"wellness", "traveler"}, Group: 3, Night: true, Loot: 25,
+	{ID: "bachelorette", Name: "Bachelorette Party", Glyph: 'B', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 2, HeatMissing: 18, Weight: 3, Gender: "f", Traits: []string{"wellness", "traveler"}, Group: 3, Night: true, Loot: 25,
 		Flavor: "Sashes, tiaras, a novelty straw. Three of them, if there's room. Nobody remembers which house."},
-	{ID: "ubereats", Name: "Uber Eats Driver", Glyph: 'u', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 3, HeatMissing: 12, Weight: 7, Traits: []string{"online", "freebie"}, Drives: true, Loot: 22,
+	{ID: "ubereats", Name: "Uber Eats Driver", Glyph: 'u', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 3, HeatMissing: 12, Weight: 7, Gender: "m", Traits: []string{"online", "freebie"}, Drives: true, Loot: 22,
 		Flavor: "Your order arrived. So did he. The app says 'delivered' and the app is right."},
 	{ID: "canvasser", Name: "Election Canvasser", Glyph: 'e', Color: "victim_easy", Marbling: 2, Fight: 1, NoticeDays: 12, HeatMissing: 4, Weight: 6, Traits: []string{"nosy"}, Loot: 3,
 		Flavor: "Do you have a minute to talk about the ballot? You have all the minutes now."},
-	{ID: "cookiedad", Name: "Cookie Dad", Glyph: 'k', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 5, HeatMissing: 15, Weight: 5, Traits: []string{"bargain"}, Loot: 40,
+	{ID: "cookiedad", Name: "Cookie Dad", Glyph: 'k', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 5, HeatMissing: 15, Weight: 5, Gender: "m", Traits: []string{"bargain"}, Loot: 40,
 		Flavor: "Selling his kid's cookies door to door. Ate most of the samples himself. It shows, beautifully."},
 	{ID: "lifecoach", Name: "Life Coach", Glyph: 'l', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 8, HeatMissing: 6, Weight: 6, Traits: []string{"online", "wellness"}, Loot: 25,
 		Flavor: "Wants to unlock your potential. You unlocked the basement instead."},
-	{ID: "gladys", Name: "Gladys From Next Door", Glyph: 'G', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 1, HeatMissing: 30, Weight: 2, Traits: []string{"nosy"}, Loot: 12,
+	{ID: "gladys", Name: "Gladys From Next Door", Glyph: 'G', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 1, HeatMissing: 30, Weight: 2, Gender: "f", Traits: []string{"nosy"}, Loot: 12,
 		Flavor: "The bundt cake, the questions, the labradoodle. Tempting. Very, very tempting."},
 }
 
@@ -148,10 +152,32 @@ func VictimByID(id string) *Victim {
 	return &Victim{ID: id, Name: "Stranger", Glyph: '?', Color: "victim_mid", Marbling: 2, Fight: 2, NoticeDays: 7, HeatMissing: 10}
 }
 
-var captiveNames = []string{
-	"Brayden", "Kayleigh", "Chad", "Tiffani", "Hunter", "Mackenzie", "Tanner", "Brittani",
-	"Blake", "Skyler", "Chip", "Bethany", "Dakota", "Jaxon", "Paisley", "Colton",
-	"Madison", "Trent", "Krystal", "Kyle", "Amber", "Preston", "Destiny", "Wyatt",
+var maleNames = []string{
+	"Brayden", "Chad", "Hunter", "Tanner", "Blake", "Chip", "Dakota", "Jaxon", "Colton", "Trent", "Kyle",
+	"Preston", "Wyatt", "Brody", "Cody", "Dustin", "Garrett", "Grayson", "Jace", "Kaden", "Landon", "Logan",
+	"Mason", "Nolan", "Parker", "Tucker", "Tyler", "Zach", "Brett", "Connor", "Derek", "Ethan", "Gavin",
+	"Jared", "Kevin", "Marcus", "Ryder", "Shane", "Travis", "Troy", "Vance", "Wade", "Weston", "Beau",
+}
+
+var femaleNames = []string{
+	"Kayleigh", "Tiffani", "Mackenzie", "Brittani", "Skyler", "Bethany", "Paisley", "Madison", "Krystal",
+	"Amber", "Destiny", "Ashlee", "Brooke", "Chelsea", "Courtney", "Crystal", "Harper", "Haley", "Jenna",
+	"Kaitlyn", "Kelsey", "Kenzie", "Lexi", "Lindsay", "Meghan", "Mikayla", "Morgan", "Payton", "Rylee",
+	"Savannah", "Sierra", "Taylor", "Whitney", "Addison", "Brianna", "Cassidy", "Destinee", "Jordyn", "Kylie",
+}
+
+// pickName draws a first name that fits the archetype's gender.
+func pickName(v *Victim, r *rand.Rand) string {
+	switch v.Gender {
+	case "m":
+		return maleNames[r.Intn(len(maleNames))]
+	case "f":
+		return femaleNames[r.Intn(len(femaleNames))]
+	}
+	if r.Intn(2) == 0 {
+		return maleNames[r.Intn(len(maleNames))]
+	}
+	return femaleNames[r.Intn(len(femaleNames))]
 }
 
 // Fixture kinds. A fixture is a slot on the map; its Kind says what the sim

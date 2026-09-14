@@ -277,7 +277,7 @@ func (w *World) capture(v *Victim, r *rand.Rand) {
 	if cell == "" {
 		return
 	}
-	name := captiveNames[r.Intn(len(captiveNames))]
+	name := pickName(v, r)
 	w.Livestock = append(w.Livestock, &Livestock{ID: w.newID(), Victim: v.ID, Name: name, Cell: cell,
 		Marbling: float64(v.Marbling), Since: w.Clock})
 	w.Missing = append(w.Missing, Missing{Victim: v.ID, Due: w.Clock + int64(v.NoticeDays*day)})
