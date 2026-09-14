@@ -131,8 +131,8 @@ func (w *World) jobCollect(wk *Worker) *Job {
 	}
 	for _, f := range w.ownedOfKind(KindStation) {
 		m := w.machine(f.ID)
-		if m.Output != nil && !m.Reserved {
-			m.Reserved = true
+		if m.Output != nil && !w.reserved(f.ID) {
+			m.ReservedBy = wk.ID
 			return &Job{Kind: "collect", Label: "plating " + RecipeByID(m.Output.Sub).Name, Machine: f.ID,
 				Steps: []Step{w.stepTo(f.ID, 2, "take_output"), w.stepTo("pantry", 0, "drop_pantry")}}
 		}
@@ -150,23 +150,23 @@ func (w *World) jobDispose(wk *Worker) *Job {
 		}
 		for _, f := range w.ownedOfKind(KindDisposal) {
 			m := w.machine(f.ID)
-			if m.Busy > 0 || m.Reserved || m.Off || !contains(f.Accepts, e.Sub) {
+			if m.Busy > 0 || w.reserved(f.ID) || m.Off || !contains(f.Accepts, e.Sub) {
 				continue
 			}
-			m.Reserved = true
+			m.ReservedBy = wk.ID
 			return &Job{Kind: "dispose", Label: "bagging " + e.Sub + " for the " + f.Name, Target: e.ID, Machine: f.ID,
 				Steps: []Step{w.stepTo("back_step", 0, "take_evidence"), w.stepTo(f.ID, 3, "load_disposal")}}
 		}
 		if w.Buried < w.PlotCap() {
 			for _, f := range w.ownedOfKind(KindPlot) {
-				if w.machine(f.ID).Reserved {
+				if w.reserved(f.ID) {
 					continue
 				}
 				work := f.Duration
 				if w.Has("shed") {
 					work /= 2
 				}
-				w.machine(f.ID).Reserved = true
+				w.machine(f.ID).ReservedBy = wk.ID
 				return &Job{Kind: "bury", Label: "burying " + e.Sub, Target: e.ID, Machine: f.ID,
 					Steps: []Step{w.stepTo("back_step", 0, "take_evidence"), w.stepTo(f.ID, work, "bury")}}
 			}
@@ -187,7 +187,7 @@ func (w *World) jobDispose(wk *Worker) *Job {
 }
 
 func (w *World) jobButcher(wk *Worker) *Job {
-	if !w.Has("block") || w.machine("block").Reserved {
+	if !w.Has("block") || w.reserved("block") {
 		return nil
 	}
 	fresh, _ := w.fridgeUsed()
@@ -225,7 +225,7 @@ func (w *World) jobButcher(wk *Worker) *Job {
 	if w.Has("knife_set") {
 		work = work * 3 / 4
 	}
-	w.machine("block").Reserved = true
+	w.machine("block").ReservedBy = wk.ID
 	return &Job{Kind: "butcher", Label: "processing " + pick.Name, Target: pick.ID, Machine: "block",
 		Steps: []Step{w.stepTo(pick.Cell, 2, "take_livestock"), w.stepTo("block", work, "butcher"),
 			w.stepTo("fridge", 0, "drop_cuts"), w.stepTo("back_step", 0, "drop_bag")}}
@@ -248,7 +248,7 @@ func (w *World) jobCook(wk *Worker, desperate bool) *Job {
 	var cands []*Recipe
 	for i := range Recipes {
 		rc := &Recipes[i]
-		if !w.Has(rc.Station) || w.machine(rc.Station).Busy > 0 || w.machine(rc.Station).Reserved || w.machine(rc.Station).Output != nil || w.machine(rc.Station).Off {
+		if !w.Has(rc.Station) || w.machine(rc.Station).Busy > 0 || w.reserved(rc.Station) || w.machine(rc.Station).Output != nil || w.machine(rc.Station).Off {
 			continue
 		}
 		if !w.hasNeeds(rc) {
@@ -283,7 +283,7 @@ func (w *World) jobCook(wk *Worker, desperate bool) *Job {
 		return cands[i].Price > cands[j].Price
 	})
 	rc := cands[0]
-	w.machine(rc.Station).Reserved = true
+	w.machine(rc.Station).ReservedBy = wk.ID
 	src := "fridge"
 	take := "take_cuts"
 	if rc.Bones {
@@ -352,8 +352,17 @@ func (w *World) betterCut(a, b Item) bool {
 	return a.Marbling > b.Marbling
 }
 
+// standID is whichever stand is owned (the folding table or its upgrade).
+func (w *World) standID() string {
+	for _, f := range w.ownedOfKind(KindStand) {
+		return f.ID
+	}
+	return ""
+}
+
 func (w *World) jobStock(wk *Worker) *Job {
-	if !w.Has("stand") || len(w.Stand) >= w.StandCap() {
+	stand := w.standID()
+	if stand == "" || len(w.Stand) >= w.StandCap() {
 		return nil
 	}
 	spare := w.foodOnShelf() - w.Policy.PantryTarget
@@ -366,7 +375,7 @@ func (w *World) jobStock(wk *Worker) *Job {
 			continue
 		}
 		return &Job{Kind: "stock", Label: "stocking the stand", Target: d.ID,
-			Steps: []Step{w.stepTo("pantry", 0, "take_sell"), w.stepTo("stand", 2, "drop_stand")}}
+			Steps: []Step{w.stepTo("pantry", 0, "take_sell"), w.stepTo(stand, 2, "drop_stand")}}
 	}
 	return nil
 }
@@ -376,7 +385,7 @@ func (w *World) jobBrainwash(wk *Worker) *Job {
 		return nil
 	}
 	m := w.machine("chair")
-	if m.Busy > 0 || m.Reserved || m.Load != 0 || m.Off || w.Renfields() >= w.CotCount() {
+	if m.Busy > 0 || w.reserved("chair") || m.Load != 0 || m.Off || w.Renfields() >= w.CotCount() {
 		return nil
 	}
 	var pick *Livestock
@@ -398,7 +407,7 @@ func (w *World) jobBrainwash(wk *Worker) *Job {
 	if pick == nil {
 		return nil
 	}
-	m.Reserved = true
+	m.ReservedBy = wk.ID
 	return &Job{Kind: "brainwash", Label: "walking " + pick.Name + " to The Chair", Target: pick.ID, Machine: "chair",
 		Steps: []Step{w.stepTo(pick.Cell, 2, "take_livestock"), w.stepTo("chair", 5, "load_chair")}}
 }
@@ -439,13 +448,51 @@ func (w *World) jobIdle(wk *Worker) *Job {
 		at := w.TrapPos()
 		return &Job{Kind: "idle", Label: "working the porch", Steps: []Step{{Dest: Pos{at.L, at.X - 1, at.Y}, Work: 30 + r.Intn(30), Do: "noop"}}}
 	}
+	why := "idle: " + w.idleReason()
 	for i := 0; i < 20; i++ {
 		x, y := wk.Pos.X+r.Intn(13)-6, wk.Pos.Y+r.Intn(7)-3
 		if p.Floor(x, y) && w.FixtureAt(Pos{wk.Pos.L, x, y}) == nil {
-			return &Job{Kind: "idle", Label: "pacing", Steps: []Step{{Dest: Pos{wk.Pos.L, x, y}, Work: 5, Do: "noop"}}}
+			return &Job{Kind: "idle", Label: why, Steps: []Step{{Dest: Pos{wk.Pos.L, x, y}, Work: 5, Do: "noop"}}}
 		}
 	}
-	return &Job{Kind: "idle", Label: "standing around", Steps: []Step{{Dest: wk.Pos, Work: 10, Do: "noop"}}}
+	return &Job{Kind: "idle", Label: why, Steps: []Step{{Dest: wk.Pos, Work: 10, Do: "noop"}}}
+}
+
+// idleReason is the most useful sentence about why there's no work: what the
+// player would change to make some.
+func (w *World) idleReason() string {
+	fresh, _ := w.fridgeUsed()
+	switch {
+	case len(w.Livestock) > 0 && w.FridgeCap()-fresh < 4 && !(w.Policy.Freeze && w.FreezerCap()-w.frozenCount() >= 4):
+		return "fridge full, can't butcher"
+	case len(w.Livestock) > 0 && !w.anyReady():
+		return fmt.Sprintf("waiting for livestock to fatten to %d", w.Policy.ButcherMarbling)
+	case len(w.Pantry) >= w.PantryCap():
+		return "shelf full"
+	case w.foodOnShelf() >= w.Policy.PantryTarget && fresh > 0 && w.standID() != "" && len(w.Stand) >= w.StandCap():
+		return "stand full, shelf stocked"
+	case w.foodOnShelf() >= w.Policy.PantryTarget && fresh > 0:
+		return "shelf stocked; nothing marked for sale needs cooking"
+	case fresh == 0 && len(w.Livestock) == 0:
+		return "nothing in the fridge, nobody in the cells"
+	case fresh == 0:
+		return "fridge empty"
+	}
+	return "nothing needs doing"
+}
+
+// anyReady reports whether policy would butcher anyone right now.
+func (w *World) anyReady() bool {
+	full := w.freeCell() == ""
+	for _, l := range w.Livestock {
+		if l.Cell == "" {
+			continue
+		}
+		if l.Order == "butcher" || int(l.Marbling) >= w.Policy.ButcherMarbling || (full && w.Policy.ButcherWhenFull) || l.Hunger >= 100 {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------
@@ -514,7 +561,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		return true
 	case "take_output":
 		m := w.machine(j.Machine)
-		m.Reserved = false
+		m.ReservedBy = 0
 		if m.Output == nil {
 			return false
 		}
@@ -545,7 +592,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		return false
 	case "load_disposal":
 		m := w.machine(j.Machine)
-		m.Reserved = false
+		m.ReservedBy = 0
 		f := FixtureByID(j.Machine)
 		ei := -1
 		for i, c := range wk.Carry {
@@ -570,7 +617,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		return true
 	case "bury":
 		m := w.machine(j.Machine)
-		m.Reserved = false
+		m.ReservedBy = 0
 		ei := -1
 		for i, c := range wk.Carry {
 			if c.Kind == "evidence" {
@@ -614,7 +661,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		return true
 	case "butcher":
 		m := w.machine("block")
-		m.Reserved = false
+		m.ReservedBy = 0
 		li := -1
 		for i, c := range wk.Carry {
 			if c.Kind == "livestock" {
@@ -698,7 +745,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		return true
 	case "start_cook":
 		m := w.machine(j.Machine)
-		m.Reserved = false
+		m.ReservedBy = 0
 		rc := RecipeByID(j.Recipe)
 		if m.Busy > 0 || m.Output != nil {
 			w.dropBack(wk)
@@ -771,7 +818,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		return true
 	case "load_chair":
 		m := w.machine("chair")
-		m.Reserved = false
+		m.ReservedBy = 0
 		li := -1
 		for i, c := range wk.Carry {
 			if c.Kind == "livestock" {
@@ -801,7 +848,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 
 func (w *World) unreserve(id string) {
 	if id != "" {
-		w.machine(id).Reserved = false
+		w.machine(id).ReservedBy = 0
 	}
 }
 

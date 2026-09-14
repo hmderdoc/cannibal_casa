@@ -154,14 +154,14 @@ type Visitor struct {
 
 // Machine is the runtime side of a fixture that processes something.
 type Machine struct {
-	Busy     int    `json:"busy"`               // minutes remaining
-	Recipe   string `json:"recipe,omitempty"`   // station: what's cooking
-	Item     string `json:"item,omitempty"`     // disposal: evidence kind inside
-	Output   *Item  `json:"output,omitempty"`   // station: finished dish awaiting the shelf
-	Load     int    `json:"load,omitempty"`     // chair: livestock inside
-	Reserved bool   `json:"reserved,omitempty"` // a worker is on the way
-	Off      bool   `json:"off,omitempty"`      // switched off by the player
-	Uses     int    `json:"uses"`
+	Busy       int    `json:"busy"`                  // minutes remaining
+	Recipe     string `json:"recipe,omitempty"`      // station: what's cooking
+	Item       string `json:"item,omitempty"`        // disposal: evidence kind inside
+	Output     *Item  `json:"output,omitempty"`      // station: finished dish awaiting the shelf
+	Load       int    `json:"load,omitempty"`        // chair: livestock inside
+	ReservedBy int    `json:"reserved_by,omitempty"` // worker whose current job is on the way here
+	Off        bool   `json:"off,omitempty"`         // switched off by the player
+	Uses       int    `json:"uses"`
 }
 
 // Policy is how the player tunes the machine without touching it.
@@ -400,6 +400,22 @@ func (w *World) TimeString() string {
 }
 
 func (w *World) IsNight() bool { h := w.Hour(); return h >= 21 || h < 6 }
+
+// reserved reports whether a machine is claimed by a worker who still holds
+// a job for it. A claim by anyone else is stale and ignored.
+func (w *World) reserved(id string) bool {
+	m := w.Machines[id]
+	if m == nil || m.ReservedBy == 0 {
+		return false
+	}
+	for _, wk := range w.Workers {
+		if wk.ID == m.ReservedBy && wk.Job != nil && wk.Job.Machine == id {
+			return true
+		}
+	}
+	m.ReservedBy = 0
+	return false
+}
 
 func (w *World) machine(id string) *Machine {
 	m := w.Machines[id]

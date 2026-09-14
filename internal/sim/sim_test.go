@@ -45,8 +45,8 @@ func TestWorkersNeverStrand(t *testing.T) {
 				t.Fatalf("worker %s is inside a wall at %v", wk.Name, wk.Pos)
 			}
 		}
-		for id, m := range w.Machines {
-			if m.Reserved {
+		for id := range w.Machines {
+			if w.reserved(id) {
 				held := false
 				for _, wk := range w.Workers {
 					if wk.Job != nil && wk.Job.Machine == id {
@@ -295,5 +295,20 @@ func TestRoleChangeDropsCarry(t *testing.T) {
 	}
 	if m := w.Machines["chipper"]; m != nil && m.Item == "" && m.Busy > 0 {
 		t.Fatal("the chipper ate something that wasn't a bag")
+	}
+}
+
+func TestFarmStandGetsStocked(t *testing.T) {
+	w := New("t", "b", 14)
+	w.Cash = 1000
+	if err := w.Build("stand_big", Pos{}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		w.Pantry = append(w.Pantry, Item{ID: w.newID(), Kind: "dish", Sub: "meat_pie", Quality: 3, Born: w.Clock})
+	}
+	w.Advance(6 * 60)
+	if len(w.Stand) == 0 && w.Stats.Sold == 0 {
+		t.Fatalf("nothing reached the farm stand: stand=%d sold=%d", len(w.Stand), w.Stats.Sold)
 	}
 }

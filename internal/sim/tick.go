@@ -817,20 +817,8 @@ func (w *World) hourly() {
 // by a job nobody holds any more, and a guest out of their cell whom nobody
 // is carrying and who isn't in the chair.
 func (w *World) sweep() {
-	for id, m := range w.Machines {
-		if !m.Reserved {
-			continue
-		}
-		held := false
-		for _, wk := range w.Workers {
-			if wk.Job != nil && wk.Job.Machine == id {
-				held = true
-				break
-			}
-		}
-		if !held {
-			m.Reserved = false
-		}
+	for id := range w.Machines {
+		w.reserved(id) // drops any stale claim as a side effect
 	}
 	chair := w.Machines["chair"]
 	for _, l := range w.Livestock {
