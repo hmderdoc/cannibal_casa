@@ -171,6 +171,42 @@ func (b *Buffer) Box(x, y, w, h int, fg, bg Attr, title string, titleFg Attr) {
 	}
 }
 
+// BoxDouble draws a double-line frame filled with bg, with a title strip
+// across the top edge, and a one-cell shadow to its right and below.
+func (b *Buffer) BoxDouble(x, y, w, h int, fg, bg Attr, title string, titleFg, titleBg Attr) {
+	if w < 2 || h < 2 {
+		return
+	}
+	for yy := y + 1; yy <= y+h; yy++ {
+		c := b.Get(x+w, yy)
+		b.Set(x+w, yy, c.Ch, Gray, Black)
+	}
+	for xx := x + 1; xx <= x+w; xx++ {
+		c := b.Get(xx, y+h)
+		b.Set(xx, y+h, c.Ch, Gray, Black)
+	}
+	b.Fill(x, y, w, h, ' ', fg, bg)
+	b.Set(x, y, '╔', fg, bg)
+	b.Set(x+w-1, y, '╗', fg, bg)
+	b.Set(x, y+h-1, '╚', fg, bg)
+	b.Set(x+w-1, y+h-1, '╝', fg, bg)
+	for xx := x + 1; xx < x+w-1; xx++ {
+		b.Set(xx, y, '═', fg, bg)
+		b.Set(xx, y+h-1, '═', fg, bg)
+	}
+	for yy := y + 1; yy < y+h-1; yy++ {
+		b.Set(x, yy, '║', fg, bg)
+		b.Set(x+w-1, yy, '║', fg, bg)
+	}
+	if title != "" && w > 6 {
+		t := " " + title + " "
+		if len([]rune(t)) > w-4 {
+			t = string([]rune(t)[:w-4])
+		}
+		b.Print(x+2, y, t, titleFg, titleBg)
+	}
+}
+
 // Bar draws a meter: label, then a filled/empty track w cells wide.
 func (b *Buffer) Bar(x, y, w int, val, max int, fill, empty, bg Attr) {
 	if max <= 0 {

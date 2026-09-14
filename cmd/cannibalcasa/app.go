@@ -300,7 +300,7 @@ func (pl *placer) draw(a *app, b *ui.Buffer) {
 	if err := a.w.CanPlace(f, sim.Pos{L: a.level, X: a.cx, Y: a.cy}); err != nil {
 		msg = fmt.Sprintf(" %s the %s: %s. Esc cancels. ", verb, f.Name, capitalize(err.Error()))
 	}
-	b.PrintN(0, b.H-1, msg, b.W, ui.Col("bright"), ui.Col("sel_bg"))
+	b.PrintN(0, b.H-1, msg, b.W, ui.Col("modal_sel_fg"), ui.Col("modal_sel_bg"))
 }
 
 // startPlacing enters placement mode on the fixture's level, cursor on a

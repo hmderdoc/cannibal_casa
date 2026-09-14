@@ -24,7 +24,7 @@ var version = "dev"
 func main() {
 	logf("=== cannibal casa %s start: args=%v pid=%d ===", version, os.Args, os.Getpid())
 	dropfile := "DOOR32.SYS"
-	forceLocal, utf8, snapshot := false, false, false
+	forceLocal, utf8, snapshot, snapMenu := false, false, false, false
 	handleArg := ""
 	cols, rows, snapDays := 0, 0, 0
 	for i := 1; i < len(os.Args); i++ {
@@ -44,6 +44,9 @@ func main() {
 			utf8 = true
 		case a == "-snapshot":
 			snapshot = true
+		case a == "-snapshot-menu":
+			snapshot = true
+			snapMenu = true
 		case a == "-snapshot-days" && i+1 < len(os.Args):
 			i++
 			snapDays, _ = strconv.Atoi(os.Args[i])
@@ -74,7 +77,7 @@ func main() {
 	}
 
 	if snapshot {
-		runSnapshot(cfg, bbs, handle, cols, rows, snapDays)
+		runSnapshot(cfg, bbs, handle, cols, rows, snapDays, snapMenu)
 		return
 	}
 
@@ -158,7 +161,7 @@ func main() {
 
 // runSnapshot renders one frame of the main screen as UTF-8 ANSI to stdout,
 // after running the house for -snapshot-days, for eyeballing the layout.
-func runSnapshot(cfg config, bbs, handle string, cols, rows, days int) {
+func runSnapshot(cfg config, bbs, handle string, cols, rows, days int, menu bool) {
 	if cols == 0 {
 		cols, rows = 80, 24
 	}
@@ -193,6 +196,9 @@ func runSnapshot(cfg config, bbs, handle string, cols, rows, days int) {
 			a.w.Advance(1440)
 		}
 		a.w.Advance(sim.DefaultScale) // land at a random-ish minute
+	}
+	if menu && a.w != nil {
+		a.openBuild("")
 	}
 	w := bufio.NewWriter(os.Stdout)
 	a.render()

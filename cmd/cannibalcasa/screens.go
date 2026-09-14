@@ -122,8 +122,8 @@ func (m *menu) draw(a *app, b *ui.Buffer) {
 			listH = h - 3 - descH
 		}
 	}
-	b.Fill(x, y, w, h, ' ', ui.White, ui.Black)
-	b.Box(x, y, w, h, ui.Col("border"), ui.Black, m.title, ui.Col("title"))
+	bg := ui.Col("modal_bg")
+	b.BoxDouble(x, y, w, h, ui.Col("modal_border"), bg, m.title, ui.Col("modal_title"), ui.Col("modal_tbg"))
 	if m.sel < m.top {
 		m.top = m.sel
 	}
@@ -136,46 +136,59 @@ func (m *menu) draw(a *app, b *ui.Buffer) {
 			break
 		}
 		it := m.items[idx]
-		fg, bg := it.color, ui.Black
+		fg, rowBg := it.color, bg
 		if fg == (ui.Attr{}) {
-			fg = ui.Col("text")
+			fg = ui.Col("modal_fg")
 		}
 		if it.disabled {
 			fg = ui.Col("dim")
 		}
 		if it.header {
-			fg = ui.Col("title")
+			fg = ui.Col("modal_title")
 		}
 		prefix := "  "
 		if idx == m.sel {
-			fg, bg = ui.Col("sel_fg"), ui.Col("sel_bg")
+			fg, rowBg = ui.Col("modal_sel_fg"), ui.Col("modal_sel_bg")
 			prefix = "> "
 		}
-		b.PrintN(x+1, y+1+i, prefix+trunc(it.label, w-4), w-2, fg, bg)
+		b.PrintN(x+1, y+1+i, prefix+trunc(it.label, w-4), w-2, fg, rowBg)
 	}
 	if len(m.items) == 0 {
-		b.Print(x+3, y+1, "(nothing here)", ui.Col("dim"), ui.Black)
+		b.Print(x+3, y+1, "(nothing here)", ui.Col("modal_hint"), bg)
 	}
 	if listH < len(m.items) {
-		b.Print(x+w-8, y+h-1, fmt.Sprintf(" %d/%d ", m.sel+1, len(m.items)), ui.Col("rule"), ui.Black)
+		b.Print(x+w-8, y+h-1, fmt.Sprintf(" %d/%d ", m.sel+1, len(m.items)), ui.Col("modal_hint"), bg)
 	}
 	if descH > 0 {
 		dy := y + 1 + listH
+		b.Set(x, dy, '╟', ui.Col("modal_border"), bg)
+		b.Set(x+w-1, dy, '╢', ui.Col("modal_border"), bg)
 		for i := 0; i < w-2; i++ {
-			b.Set(x+1+i, dy, '─', ui.Col("border"), ui.Black)
+			b.Set(x+1+i, dy, '─', ui.Col("modal_border"), bg)
 		}
+		descBg := ui.Col("modal_desc")
+		b.Fill(x+1, dy+1, w-2, descH-1, ' ', ui.White, descBg)
 		lines := 0
 		for _, e := range m.items[m.sel].desc {
 			for _, l := range wrap(e.Text, w-4) {
 				if lines >= descH-1 {
 					break
 				}
-				b.PrintN(x+2, dy+1+lines, l, w-4, kindColor(e.Kind), ui.Black)
+				b.PrintN(x+2, dy+1+lines, l, w-4, modalKind(e.Kind), descBg)
 				lines++
 			}
 		}
 	}
-	b.Print(x+2, y+h-1, " "+m.footer+" ", ui.Col("rule"), ui.Black)
+	b.Print(x+2, y+h-1, " "+m.footer+" ", ui.Col("modal_hint"), bg)
+}
+
+// modalKind maps journal kinds onto colors that read on the modal's ground:
+// gray hints become light gray, everything else keeps its color.
+func modalKind(kind string) ui.Attr {
+	if kind == "dim" {
+		return ui.White
+	}
+	return kindColor(kind)
 }
 
 // ---------------------------------------------------------------------------
@@ -233,19 +246,19 @@ func (p *panel) draw(a *app, b *ui.Buffer) {
 	if p.scroll > max(len(rows)-(h-2), 0) {
 		p.scroll = max(len(rows)-(h-2), 0)
 	}
-	b.Fill(x, y, w, h, ' ', ui.White, ui.Black)
-	b.Box(x, y, w, h, ui.Col("border"), ui.Black, p.title, ui.Col("title"))
+	bg := ui.Col("modal_bg")
+	b.BoxDouble(x, y, w, h, ui.Col("modal_border"), bg, p.title, ui.Col("modal_title"), ui.Col("modal_tbg"))
 	for i := 0; i < h-2; i++ {
 		idx := p.scroll + i
 		if idx >= len(rows) {
 			break
 		}
-		b.PrintN(x+2, y+1+i, rows[idx].Text, w-4, kindColor(rows[idx].Kind), ui.Black)
+		b.PrintN(x+2, y+1+i, rows[idx].Text, w-4, modalKind(rows[idx].Kind), bg)
 	}
 	if len(rows) > h-2 {
-		b.Print(x+w-12, y+h-1, " ↑↓ more ", ui.Col("rule"), ui.Black)
+		b.Print(x+w-12, y+h-1, " ↑↓ more ", ui.Col("modal_hint"), bg)
 	}
-	b.Print(x+2, y+h-1, " "+p.footer+" ", ui.Col("rule"), ui.Black)
+	b.Print(x+2, y+h-1, " "+p.footer+" ", ui.Col("modal_hint"), bg)
 }
 
 func confirm(title, text string, yes func(a *app)) *menu {
@@ -283,10 +296,10 @@ func (p *prompt) key(a *app, k key) {
 
 func (p *prompt) draw(a *app, b *ui.Buffer) {
 	x, y, w, h := frame(b, 44, 5)
-	b.Fill(x, y, w, h, ' ', ui.White, ui.Black)
-	b.Box(x, y, w, h, ui.Col("border"), ui.Black, p.title, ui.Col("title"))
-	b.PrintN(x+2, y+2, string(p.value)+"_", w-4, ui.Col("bright"), ui.Black)
-	b.Print(x+2, y+h-1, " Enter ok · Esc cancel ", ui.Col("dim"), ui.Black)
+	bg := ui.Col("modal_bg")
+	b.BoxDouble(x, y, w, h, ui.Col("modal_border"), bg, p.title, ui.Col("modal_title"), ui.Col("modal_tbg"))
+	b.PrintN(x+2, y+2, string(p.value)+"_", w-4, ui.Col("modal_sel_fg"), ui.Col("modal_sel_bg"))
+	b.Print(x+2, y+h-1, " Enter ok · Esc cancel ", ui.Col("modal_hint"), bg)
 }
 
 // ---------------------------------------------------------------------------
