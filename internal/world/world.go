@@ -53,6 +53,9 @@ type Backend interface {
 	Neighborhood(bbs, handle string) (Neighborhood, error)
 	Casserole(bbs, handle, toKey string, dishID int) (*sim.World, error)
 	Tip(bbs, handle, toKey string) (*sim.World, error)
+	// Raid sends the cannibal to break into a neighbor's house; the outcome is
+	// settled against that house's defenses now and lands when they get home.
+	Raid(bbs, handle, toKey string) (*sim.World, error)
 	Leave(bbs, handle string) error
 	Close() error
 }

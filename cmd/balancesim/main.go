@@ -29,6 +29,20 @@ var plans = []plan{
 		func(w *sim.World) { w.Policy.Brainwash = true; w.Policy.PantryTarget = 4 }},
 }
 
+// freeTile is the first legal tile for a fixture, scanning from the top left.
+func freeTile(w *sim.World, f *sim.Fixture) sim.Pos {
+	p := sim.Plans[f.Level]
+	for y, row := range p.Rows {
+		for x := range row {
+			pos := sim.Pos{L: f.Level, X: x, Y: y}
+			if w.CanPlace(f, pos) == nil {
+				return pos
+			}
+		}
+	}
+	return sim.Pos{}
+}
+
 func main() {
 	runs := flag.Int("runs", 30, "games per plan")
 	days := flag.Int("days", 60, "days per game")
@@ -49,7 +63,7 @@ func main() {
 				for _, id := range p.order {
 					f := sim.FixtureByID(id)
 					if !w.Has(id) && w.Cash >= float64(f.Cost+40) {
-						w.Build(id)
+						w.Build(id, freeTile(w, f))
 					}
 				}
 				w.Advance(1440)

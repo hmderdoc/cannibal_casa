@@ -145,7 +145,7 @@ func (w *World) tickPassers() {
 		case "walk":
 			if p.Pos.X == GateTile.X && w.tryLure(p, r) {
 				p.State = "lured"
-				p.Path = Path(p.Pos, SlotPos(FixtureByID("welcome_mat")))
+				p.Path = Path(p.Pos, w.TrapPos())
 				keep = append(keep, p)
 				continue
 			}
@@ -193,6 +193,7 @@ func (w *World) tryLure(p *Passerby, r *rand.Rand) bool {
 	if w.Has("doorbell_cam") {
 		chance -= 5
 	}
+	chance += 15 * w.RoleCount(RoleShill)
 	return r.Intn(1000) < clamp(chance, 5, 250)
 }
 
@@ -243,13 +244,23 @@ func (w *World) springTrap(p *Passerby, r *rand.Rand) {
 	}
 	w.TrapReady = w.Clock + 60
 	w.capture(v, r)
+	more := 0
 	if p.Pair {
+		more = 1
+	}
+	if v.Group > 1 {
+		more = v.Group - 1
+	}
+	for i := 0; i < more; i++ {
 		if w.freeCell() != "" {
-			w.say("good", "There were two of them. There are always two of them.")
+			if i == 0 && p.Pair {
+				w.say("good", "There were two of them. There are always two of them.")
+			}
 			w.capture(v, r)
 		} else {
 			w.Heat = clampF(w.Heat+4, 0, 120)
-			w.say("bad", "The second missionary saw the first one drop and sprinted. Heat +4.")
+			w.say("bad", "The rest of the %s saw the drop and sprinted. Heat +4.", strings.ToLower(v.Name))
+			break
 		}
 	}
 	if v.Drives {
@@ -270,6 +281,11 @@ func (w *World) capture(v *Victim, r *rand.Rand) {
 	w.Stats.Captured++
 	w.Heat = clampF(w.Heat+1, 0, 120)
 	w.say("good", "Thump. %s the %s is in %s. %s", name, v.Name, FixtureByID(cell).Name, v.Flavor)
+	if v.Loot > 0 {
+		w.Cash += float64(v.Loot)
+		w.Stats.Looted += v.Loot
+		w.say("cash", "Their wallet: $%d.", v.Loot)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -344,7 +360,7 @@ func (w *World) tickMachines() {
 			w.removeLivestock(l.ID)
 			if w.Renfields() < w.CotCount() {
 				w.Workers = append(w.Workers, &Worker{ID: w.newID(), Name: l.Name, Kind: "renfield", Victim: l.Victim,
-					Pos: SlotPos(FixtureByID("chair")), Hunger: 60, Energy: 60, Loyalty: 70})
+					Pos: w.Pos("chair"), Hunger: 60, Energy: 60, Loyalty: 70})
 				w.say("good", "%s blinks twice and asks what needs doing. A Renfield.", l.Name)
 				w.post("info", "has a new 'roommate'. Very quiet. Very helpful.")
 			} else if cell := w.freeCell(); cell != "" {
@@ -376,6 +392,9 @@ func (w *World) tickWorkers() {
 		if wk.Hunger <= 0 {
 			wk.Starving++
 		}
+		if wk.Kind == "convert" {
+			wk.Hunger = clampF(wk.Hunger-100.0/(6*day), 0, 100) // eats like family: half again as much
+		}
 		if wk.Kind == "renfield" {
 			drop := 3.0 / day
 			if w.Has("big_tv") {
@@ -390,8 +409,10 @@ func (w *World) tickWorkers() {
 				w.unreserve(jobMachine(wk))
 				continue
 			}
+		}
+		if wk.Kind != "cannibal" {
 			if wk.Starving > 2*day {
-				w.say("bad", "%s starved. A Renfield needs feeding too. Bones on the step.", wk.Name)
+				w.say("bad", "%s starved. They need feeding too. Bones on the step.", wk.Name)
 				w.Pile = append(w.Pile, Item{ID: w.newID(), Kind: "evidence", Sub: "bones", Victim: wk.Victim, Born: w.Clock})
 				w.dropBack(wk)
 				w.unreserve(jobMachine(wk))
@@ -399,6 +420,12 @@ func (w *World) tickWorkers() {
 			}
 		}
 		keep = append(keep, wk)
+		if wk.Away != nil {
+			if w.Clock >= wk.Away.Until {
+				w.returnHome(wk)
+			}
+			continue
+		}
 		if wk.Asleep {
 			continue
 		}
@@ -535,7 +562,7 @@ func (w *World) sendVisitor(kind string, tier int, name string) {
 	if kind == "dog" {
 		start = Pos{Backyard, 44, 3}
 		plots := w.ownedOfKind(KindPlot)
-		dest = SlotPos(plots[w.rng().Intn(len(plots))])
+		dest = w.Pos(plots[w.rng().Intn(len(plots))].ID)
 	}
 	w.Visitors = append(w.Visitors, &Visitor{ID: w.newID(), Kind: kind, Tier: tier, Name: name, Pos: start,
 		Path: Path(start, dest), State: "arrive"})
@@ -601,7 +628,7 @@ func (w *World) hourly() {
 		}
 	}
 	heat += 0.3 * float64(len(w.Driveway))
-	if !w.Has("soundproof") {
+	if !w.Has("soundproof") && w.RoleCount(RoleGimp) == 0 {
 		for _, l := range w.Livestock {
 			if l.Hunger > 50 {
 				heat += 0.12
@@ -722,6 +749,12 @@ func (w *World) hourly() {
 			pct -= 0.1
 		}
 		pct -= 0.1 * float64(w.Renfields())
+		if w.RoleCount(RoleGuard) > 0 {
+			pct /= 3
+		}
+		if w.RoleCount(RoleGimp) > 0 {
+			pct /= 2
+		}
 		if r.Float64()*100 < pct {
 			w.removeLivestock(l.ID)
 			w.Stats.Escaped++

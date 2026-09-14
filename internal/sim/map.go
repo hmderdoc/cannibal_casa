@@ -31,8 +31,8 @@ type Pos struct {
 }
 
 // Plan is a floor: '#' wall, '.' floor, '+' door, '=' street, '-' sidewalk,
-// '>' '<' stairs, '@' spawn, any other character a fixture slot. Everything
-// but '#' and '=' is walkable; the street is for cars.
+// '>' '<' stairs. Fixtures are placed by the player on any floor tile of the
+// right level (see Fixture.Level / Front), so the plan itself is just rooms.
 type Plan struct {
 	Level Level
 	Rows  []string
@@ -49,63 +49,65 @@ var Plans = [NumLevels]Plan{
 		"==============================================",
 		"----------------------------------------------",
 		"#########+####################################",
-		"#.1.2.3.4.5.6..0.#.W....X....Y....Z....a.....#",
-		"#.......7........#...........................#",
+		"#................#...........................#",
+		"#................#...........................#",
 		"########+################+####################",
-		"#.A..B..C..D..E..#..O.....P.....Q.....N......#",
+		"#................#...........................#",
 		"#................+...........................#",
-		"#.F..G..H..I..J..#...........................+",
-		"#.K..L...........#...........................#",
+		"#................#...........................+",
+		"#................#...........................#",
 		"########+################+############+#######",
-		"#..z........y.x.#....R....U....#......>......#",
-		"#...............#...............#......<.....#",
+		"#...............#..............#.............#",
+		"#...............#..............#......><.....#",
 		"##############################################",
 	}, Rooms: []Room{
-		{"PORCH", 9, 4}, {"GARAGE", 21, 4}, {"KITCHEN", 5, 7}, {"LIVING ROOM", 25, 8},
-		{"CLOSET", 19, 12}, {"HALL", 34, 11}, {"BEDROOM", 5, 12},
+		{"PORCH", 1, 4}, {"GARAGE", 18, 4}, {"KITCHEN", 1, 9}, {"LIVING ROOM", 18, 9},
+		{"CLOSET", 17, 12}, {"HALL", 33, 11}, {"BEDROOM", 1, 12},
 	}},
 	Basement: {Level: Basement, Rows: []string{
 		"##############################################",
-		"#..A....B....C....D....E....#....F..G..H.....#",
+		"#...........................#................#",
 		"#...........................+......>.........#",
-		"#...........................#......K.........#",
+		"#...........................#................#",
 		"##############################################",
-	}, Rooms: []Room{{"CELLS", 2, 3}, {"UTILITY", 38, 3}}},
+	}, Rooms: []Room{{"CELLS", 1, 3}, {"UTILITY", 38, 1}}},
 	Backyard: {Level: Backyard, Rows: []string{
 		"##############################################",
-		"#.A....B....C........D....E.......F..........#",
+		"#............................................#",
 		"+............................................#",
-		"#......G....H..........I..........J..........#",
-		"#....................P.......................#",
+		"#............................................#",
+		"#............................................#",
 		"##############################################",
-	}, Rooms: []Room{{"BACKYARD", 30, 4}}},
+	}, Rooms: []Room{{"BACKYARD", 34, 4}}},
 	Attic: {Level: Attic, Rows: []string{
 		"##############################################",
-		"#.....A.......B.......C.......D.......E....F.#",
+		"#............................................#",
 		"#............................................#",
 		"#.....................<......................#",
 		"##############################################",
-	}, Rooms: []Room{{"ATTIC", 2, 2}}},
+	}, Rooms: []Room{{"ATTIC", 1, 1}}},
 }
 
 // Links join tiles across levels: stairs and the back door. Both directions.
 var Links = map[Pos]Pos{
-	{Ground, 39, 11}:  {Basement, 35, 2},
-	{Basement, 35, 2}: {Ground, 39, 11},
+	{Ground, 38, 12}:  {Basement, 35, 2},
+	{Basement, 35, 2}: {Ground, 38, 12},
 	{Ground, 39, 12}:  {Attic, 22, 3},
 	{Attic, 22, 3}:    {Ground, 39, 12},
 	{Ground, 45, 8}:   {Backyard, 0, 2},
 	{Backyard, 0, 2}:  {Ground, 45, 8},
 }
 
-// Named tiles the sim routes to.
+// Named tiles and areas the sim routes to.
 var (
 	GateTile     = Pos{Ground, 9, 2} // sidewalk gate
-	FrontDoor    = Pos{Ground, 8, 4} // where a visitor knocks
+	FrontDoor    = Pos{Ground, 8, 4} // where a visitor knocks and an errand returns
 	SidewalkY    = 1
 	StreetY      = 0
 	DrivewayX    = 11 // where a victim's car parks on the street row
 	SidewalkEnds = [2]int{0, 45}
+	// PorchRect is the front of the house: lures, the trap and the stand go here.
+	PorchRect = struct{ X0, Y0, X1, Y1 int }{1, 3, 16, 4}
 )
 
 func (p Plan) At(x, y int) byte {
@@ -120,19 +122,13 @@ func (p Plan) Walkable(x, y int) bool {
 	return c != '#' && c != '='
 }
 
-func (p Plan) SlotAt(x, y int) byte {
-	switch c := p.At(x, y); c {
-	case '#', '.', '+', '@', '=', '-', '>', '<':
-		return 0
-	default:
-		return c
-	}
-}
+// Floor reports whether a tile is plain interior floor (where things go).
+func (p Plan) Floor(x, y int) bool { return p.At(x, y) == '.' }
 
 func (p Plan) Spawn() Pos {
 	for y, row := range p.Rows {
 		for x := range row {
-			if row[x] == '@' || row[x] == '>' {
+			if row[x] == '>' {
 				return Pos{p.Level, x, y}
 			}
 		}
@@ -140,33 +136,11 @@ func (p Plan) Spawn() Pos {
 	return Pos{p.Level, 1, 1}
 }
 
-// SlotPos finds a fixture's tile.
-func SlotPos(f *Fixture) Pos {
-	p := Plans[f.Level]
-	for y, row := range p.Rows {
-		for x := range row {
-			if row[x] == f.Slot {
-				return Pos{f.Level, x, y}
-			}
-		}
-	}
-	return Pos{f.Level, 1, 1}
-}
-
-// FixturesAtSlot lists every fixture that can occupy a tile (an upgrade
-// replaces its predecessor in the same slot, e.g. the trapdoors).
-func FixturesAtSlot(level Level, slot byte) []*Fixture {
-	var out []*Fixture
-	for i := range Fixtures {
-		f := &Fixtures[i]
-		if f.Level == level && f.Slot == slot {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
 func walkable(p Pos) bool { return Plans[p.L].Walkable(p.X, p.Y) }
+
+func inPorch(p Pos) bool {
+	return p.L == Ground && p.X >= PorchRect.X0 && p.X <= PorchRect.X1 && p.Y >= PorchRect.Y0 && p.Y <= PorchRect.Y1
+}
 
 // Path finds a route between tiles with breadth-first search over the four
 // neighbors plus the stair/door links. The house is tiny, so no caching.

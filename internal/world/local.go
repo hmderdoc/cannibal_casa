@@ -249,3 +249,112 @@ func (l *Local) Close() error {
 	l.live = map[string]*live{}
 	return first
 }
+
+// Raid settles a break-in at another player's house and sends the raider out.
+// Defense is what the target owns and who's home; the target loses a little
+// cash and a few items, and hears about it. Once per target per real day.
+func (l *Local) Raid(bbs, handle, toKey string) (*sim.World, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	lv, key, err := l.get(bbs, handle)
+	if err != nil {
+		return nil, err
+	}
+	w := lv.w
+	if toKey == key {
+		return w, fmt.Errorf("you live there")
+	}
+	if p := w.Player(); p == nil || p.Away != nil {
+		return w, fmt.Errorf("you're already out")
+	}
+	today := l.Now().Unix() / 86400
+	if w.LastRaid == nil {
+		w.LastRaid = map[string]int64{}
+	}
+	if w.LastRaid[toKey] == today {
+		return w, fmt.Errorf("you hit that house today already; the street would notice a pattern")
+	}
+	// The target: live in this process, or on disk.
+	var tw *sim.World
+	tl, live := l.live[toKey]
+	if live {
+		tw = tl.w
+	} else {
+		tw, err = l.Store.Load(toKey)
+		if err != nil || tw == nil {
+			return w, fmt.Errorf("no such neighbor")
+		}
+		tw.Catchup(l.Now())
+	}
+	defense := 20
+	if tw.Has("cameras") {
+		defense += 25
+	}
+	if tw.Has("fence") {
+		defense += 15
+	}
+	if tw.Has("doorbell_cam") {
+		defense += 10
+	}
+	defense += 20 * tw.RoleCount(sim.RoleGuard)
+	for _, wk := range tw.Workers {
+		if wk.Away == nil && !wk.Asleep {
+			defense += 8
+		}
+	}
+	attack := 60
+	if w.Has("van") {
+		attack += 10
+	}
+	if w.Has("chemistry") {
+		attack += 10
+	}
+	e := &sim.Errand{Kind: "raid", Label: "raiding " + tw.Cannibal + "'s house", TextKind: "cash"}
+	w.LastRaid[toKey] = today
+	if rand.Intn(attack+defense) < attack {
+		loot := int(tw.Cash * 0.15)
+		if loot > 100 {
+			loot = 100
+		}
+		tw.Cash -= float64(loot)
+		e.Cash = loot
+		taken := 0
+		for i := 0; i < 2 && len(tw.Fridge) > 0; i++ {
+			c := tw.Fridge[len(tw.Fridge)-1]
+			tw.Fridge = tw.Fridge[:len(tw.Fridge)-1]
+			c.Frozen = false
+			e.Items = append(e.Items, c)
+			taken++
+		}
+		if len(tw.Pantry) > 0 {
+			d := tw.Pantry[len(tw.Pantry)-1]
+			tw.Pantry = tw.Pantry[:len(tw.Pantry)-1]
+			e.Items = append(e.Items, d)
+			taken++
+		}
+		e.Text = fmt.Sprintf("In and out of %s's place: $%d and %d thing%s from the kitchen.", tw.Cannibal, loot, taken, plural(taken))
+		e.Post = fmt.Sprintf("'s street: someone jimmied %s's side door. 'Nothing missing but the casserole.'", tw.Cannibal)
+		tw.Ticker = append(tw.Ticker, sim.Line{Tick: tw.Clock, Kind: "bad", Text: fmt.Sprintf("Somebody broke in. $%d and %d thing%s from the kitchen are gone. The side door is scratched.", loot, taken, plural(taken))})
+	} else {
+		e.Heat = 10
+		e.TextKind = "bad"
+		e.Text = fmt.Sprintf("%s's house was watching. You ran. Heat +10.", tw.Cannibal)
+		tw.Ticker = append(tw.Ticker, sim.Line{Tick: tw.Clock, Kind: "warn", Text: "Someone tried the side door in the night and ran when the light came on."})
+		tw.Heat += 2
+	}
+	if !live {
+		l.Store.Save(toKey, tw)
+	}
+	if err := w.StartRaid(e); err != nil {
+		return w, err
+	}
+	l.flush(key, lv, true)
+	return w, nil
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}

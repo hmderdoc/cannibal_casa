@@ -6,23 +6,9 @@ func TestPlansConsistent(t *testing.T) {
 	for l := Level(0); l < NumLevels; l++ {
 		p := Plans[l]
 		w := len(p.Rows[0])
-		seen := map[byte]int{}
 		for y, row := range p.Rows {
 			if len(row) != w {
 				t.Errorf("%s row %d is %d wide, want %d", l, y, len(row), w)
-			}
-			for x := range row {
-				if s := p.SlotAt(x, y); s != 0 {
-					seen[s]++
-					if len(FixturesAtSlot(l, s)) == 0 {
-						t.Errorf("%s slot %q at %d,%d has no fixture", l, s, x, y)
-					}
-				}
-			}
-		}
-		for _, f := range Fixtures {
-			if f.Level == l && seen[f.Slot] != 1 {
-				t.Errorf("fixture %s slot %q appears %d times on %s", f.ID, f.Slot, seen[f.Slot], l)
 			}
 		}
 	}
@@ -41,9 +27,15 @@ func TestPlansConsistent(t *testing.T) {
 			}
 		}
 	}
+	w := New("t", "b", 1)
 	for _, f := range Fixtures {
 		if f.Prereq != "" && FixtureByID(f.Prereq) == nil {
 			t.Errorf("fixture %s prereq %s missing", f.ID, f.Prereq)
+		}
+		if f.Starter {
+			if err := w.CanPlace(&f, f.At); err != nil {
+				t.Errorf("starter %s default tile %v: %v", f.ID, f.At, err)
+			}
 		}
 	}
 	for _, v := range Victims {
@@ -58,11 +50,12 @@ func TestPlansConsistent(t *testing.T) {
 // Every fixture tile is reachable from every other: the sidewalk to the cells,
 // the cells to the block, the block to the fridge, the fridge to the back step.
 func TestEverythingReachable(t *testing.T) {
+	w := New("t", "b", 1)
 	var tiles []Pos
-	for i := range Fixtures {
-		tiles = append(tiles, SlotPos(&Fixtures[i]))
+	for id := range w.Placed {
+		tiles = append(tiles, w.Pos(id))
 	}
-	tiles = append(tiles, Pos{Ground, 0, SidewalkY}, GateTile, FrontDoor)
+	tiles = append(tiles, Pos{Ground, 0, SidewalkY}, GateTile, FrontDoor, Pos{Attic, 1, 1}, Pos{Backyard, 44, 3})
 	for _, a := range tiles {
 		for _, b := range tiles {
 			if a != b && Path(a, b) == nil {
@@ -70,7 +63,7 @@ func TestEverythingReachable(t *testing.T) {
 			}
 		}
 	}
-	if len(Path(Pos{Basement, 2, 1}, SlotPos(FixtureByID("fridge")))) > 80 {
+	if len(Path(Pos{Basement, 2, 1}, w.Pos("fridge"))) > 80 {
 		t.Error("cell to fridge path is absurdly long")
 	}
 }

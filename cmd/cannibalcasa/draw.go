@@ -33,46 +33,6 @@ func (a *app) render() {
 	}
 }
 
-// machineColor tints an owned fixture by what it's doing.
-func (a *app) machineColor(f *sim.Fixture) ui.Attr {
-	m := a.w.Machines[f.ID]
-	if m != nil && m.Off {
-		return ui.Col("dim")
-	}
-	switch f.Kind {
-	case sim.KindStation, sim.KindDisposal, sim.KindChair:
-		if m != nil && (m.Busy > 0 || m.Output != nil) {
-			return ui.Col("busy")
-		}
-	case sim.KindContainer:
-		switch f.ID {
-		case "back_step":
-			n := len(a.w.Pile)
-			switch {
-			case n == 0:
-				return ui.Col("dim")
-			case n >= 5:
-				return ui.Col("heat_hi")
-			}
-			return ui.Col("heat_mid")
-		case "fridge", "fridge_big":
-			fresh, _ := fridgeUsed(a.w)
-			if fresh >= a.w.FridgeCap() {
-				return ui.Col("full")
-			}
-		case "pantry", "pantry_big":
-			if len(a.w.Pantry) >= a.w.PantryCap() {
-				return ui.Col("full")
-			}
-		}
-	case sim.KindStand:
-		if len(a.w.Stand) > 0 {
-			return ui.Col("busy")
-		}
-	}
-	return ui.Col(f.Color)
-}
-
 func fridgeUsed(w *sim.World) (fresh, frozen int) {
 	for _, c := range w.Fridge {
 		if c.Frozen {
@@ -84,6 +44,65 @@ func fridgeUsed(w *sim.World) (fresh, frozen int) {
 	return
 }
 
+func (a *app) levelBg(l sim.Level) ui.Attr {
+	switch l {
+	case sim.Basement:
+		return ui.Col("bg_basement")
+	case sim.Backyard:
+		return ui.Col("bg_yard")
+	case sim.Attic:
+		return ui.Col("bg_attic")
+	}
+	return ui.Col("bg_ground")
+}
+
+// fixtureCell picks glyph, fg and bg for an owned fixture by what it's doing.
+func (a *app) fixtureCell(f *sim.Fixture, floorBg ui.Attr, occupants map[string]occupant) (rune, ui.Attr, ui.Attr) {
+	if o, ok := occupants[f.ID]; ok {
+		return o.glyph, o.color, ui.Col("bg_cell")
+	}
+	m := a.w.Machines[f.ID]
+	fg, bg := ui.Col(f.Color), floorBg
+	if m != nil && m.Off {
+		return f.Glyph, ui.Col("dim"), floorBg
+	}
+	switch f.Kind {
+	case sim.KindStation, sim.KindDisposal, sim.KindChair:
+		if m != nil && (m.Busy > 0 || m.Output != nil) {
+			bg = ui.Col("bg_busy")
+			fg = ui.Col("bright")
+		}
+	case sim.KindContainer:
+		switch f.ID {
+		case "back_step":
+			n := len(a.w.Pile)
+			switch {
+			case n == 0:
+				fg = ui.Col("dim")
+			case n >= 5:
+				fg, bg = ui.Col("bright"), ui.Col("bg_full")
+			default:
+				fg = ui.Col("heat_mid")
+			}
+		case "fridge", "fridge_big":
+			if fresh, _ := fridgeUsed(a.w); fresh >= a.w.FridgeCap() {
+				bg = ui.Col("bg_full")
+			}
+		case "pantry", "pantry_big":
+			if len(a.w.Pantry) >= a.w.PantryCap() {
+				bg = ui.Col("bg_full")
+			}
+		}
+	case sim.KindStand:
+		if len(a.w.Stand) > 0 {
+			bg = ui.Col("bg_busy")
+		}
+	case sim.KindCell:
+		fg = ui.Col("dim")
+	}
+	return f.Glyph, fg, bg
+}
+
 func (a *app) drawMap(ox, oy int) {
 	b := a.buf
 	w := a.w
@@ -93,22 +112,22 @@ func (a *app) drawMap(ox, oy int) {
 	b.Print(ox+2, oy, fmt.Sprintf(" CANNIBAL CASA ─ %s ", strings.ToUpper(a.level.String())), ui.Col("title"), ui.Black)
 	b.Print(ox+mapW-14, oy, " Tab: floor ", ui.Col("dim"), ui.Black)
 
-	wallCol, floorCol, floorCh := ui.Col("wall"), ui.Col("floor_ground"), '·'
+	floorBg := a.levelBg(a.level)
+	wallCol := ui.Col("wall")
 	switch a.level {
 	case sim.Basement:
-		wallCol, floorCol = ui.Col("wall_basement"), ui.Col("floor_basement")
+		wallCol = ui.Col("wall_basement")
 	case sim.Backyard:
-		wallCol, floorCol, floorCh = ui.Col("wall_yard"), ui.Col("floor_yard"), ','
+		wallCol = ui.Col("wall_yard")
 		if w.Has("fence") {
 			wallCol = ui.Col("fix_yard")
 		}
 	case sim.Attic:
-		wallCol, floorCol = ui.Col("wall_attic"), ui.Col("floor_attic")
+		wallCol = ui.Col("wall_attic")
 	}
 	isWall := func(x, y int) bool {
 		return y >= 0 && y < len(p.Rows) && x >= 0 && x < len(p.Rows[y]) && p.Rows[y][x] == '#'
 	}
-	occupants := a.cellOccupants()
 	for y, row := range p.Rows {
 		for x := 0; x < len(row); x++ {
 			sx, sy := ox+1+x, oy+1+y
@@ -116,36 +135,24 @@ func (a *app) drawMap(ox, oy int) {
 			case '#':
 				if isWall(x, y-1) && isWall(x+1, y) && isWall(x, y+1) && isWall(x-1, y) &&
 					isWall(x-1, y-1) && isWall(x+1, y-1) && isWall(x-1, y+1) && isWall(x+1, y+1) {
-					b.Set(sx, sy, '▒', wallCol, ui.Black)
+					b.Set(sx, sy, ' ', wallCol, ui.Black)
 					continue
 				}
 				b.Set(sx, sy, ui.WallGlyph(isWall(x, y-1), isWall(x+1, y), isWall(x, y+1), isWall(x-1, y)), wallCol, ui.Black)
-			case '.', '@':
-				b.Set(sx, sy, floorCh, floorCol, ui.Black)
+			case '.':
+				bg := floorBg
+				if a.level == sim.Ground && y <= 4 {
+					bg = ui.Col("bg_porch")
+				}
+				b.Set(sx, sy, ' ', ui.White, bg)
 			case '+':
-				b.Set(sx, sy, '+', ui.Col("door"), ui.Black)
+				b.Set(sx, sy, '+', ui.Col("door"), floorBg)
 			case '=':
 				b.Set(sx, sy, '═', ui.Col("street"), ui.Black)
 			case '-':
-				b.Set(sx, sy, '─', ui.Col("sidewalk"), ui.Black)
-			case '>':
-				b.Set(sx, sy, '>', ui.Col("door"), ui.Black)
-			case '<':
-				b.Set(sx, sy, '<', ui.Col("door"), ui.Black)
-			default:
-				var owned *sim.Fixture
-				for _, f := range sim.FixturesAtSlot(a.level, ch) {
-					if w.Has(f.ID) {
-						owned = f
-					}
-				}
-				if owned == nil {
-					b.Set(sx, sy, '?', ui.Col("slot_empty"), ui.Black)
-				} else if v, ok := occupants[owned.ID]; ok {
-					b.Set(sx, sy, v.glyph, v.color, ui.Black)
-				} else {
-					b.Set(sx, sy, owned.Glyph, a.machineColor(owned), ui.Black)
-				}
+				b.Set(sx, sy, ' ', ui.Col("sidewalk"), ui.Col("bg_sidewalk"))
+			case '>', '<':
+				b.Set(sx, sy, rune(ch), ui.Col("key"), floorBg)
 			}
 		}
 	}
@@ -153,9 +160,23 @@ func (a *app) drawMap(ox, oy int) {
 		for i, ch := range r.Name {
 			x, y := r.X+i, r.Y
 			if p.At(x, y) == '.' {
-				b.Set(ox+1+x, oy+1+y, ch, ui.Col("label"), ui.Black)
+				bg := floorBg
+				if a.level == sim.Ground && y <= 4 {
+					bg = ui.Col("bg_porch")
+				}
+				b.Set(ox+1+x, oy+1+y, ch, ui.Col("label"), bg)
 			}
 		}
+	}
+	// Fixtures where the player put them.
+	occupants := a.cellOccupants()
+	for id, at := range w.Placed {
+		f := sim.FixtureByID(id)
+		if f == nil || !w.Has(id) || at.L != a.level {
+			continue
+		}
+		g, fg, bg := a.fixtureCell(f, b.Get(ox+1+at.X, oy+1+at.Y).Bg, occupants)
+		b.Set(ox+1+at.X, oy+1+at.Y, g, fg, bg)
 	}
 	// Cars at the curb.
 	if a.level == sim.Ground {
@@ -166,11 +187,15 @@ func (a *app) drawMap(ox, oy int) {
 			b.Set(ox+1+sim.DrivewayX+i*2, oy+1+sim.StreetY, 'c', ui.Col("heat_hi"), ui.Black)
 		}
 	}
-	// Entities: passers-by, visitors, workers.
-	for _, ps := range w.Passers {
-		if ps.Pos.L != a.level {
-			continue
+	// Entities keep the background of the tile they stand on.
+	put := func(pos sim.Pos, g rune, fg ui.Attr) {
+		if pos.L != a.level {
+			return
 		}
+		c := b.Get(ox+1+pos.X, oy+1+pos.Y)
+		b.Set(ox+1+pos.X, oy+1+pos.Y, g, fg, c.Bg)
+	}
+	for _, ps := range w.Passers {
 		v := sim.VictimByID(ps.Victim)
 		col := ui.Col(v.Color)
 		if ps.State == "lured" {
@@ -178,12 +203,9 @@ func (a *app) drawMap(ox, oy int) {
 		} else if ps.State == "flee" {
 			col = ui.Col("heat_hi")
 		}
-		b.Set(ox+1+ps.Pos.X, oy+1+ps.Pos.Y, v.Glyph, col, ui.Black)
+		put(ps.Pos, v.Glyph, col)
 	}
 	for _, vs := range w.Visitors {
-		if vs.Pos.L != a.level {
-			continue
-		}
 		g, col := 'I', ui.Col("victim_heat")
 		switch vs.Kind {
 		case "dog":
@@ -191,24 +213,36 @@ func (a *app) drawMap(ox, oy int) {
 		case "police":
 			g, col = 'P', ui.Col("fix_cell")
 		}
-		b.Set(ox+1+vs.Pos.X, oy+1+vs.Pos.Y, g, col, ui.Black)
+		put(vs.Pos, g, col)
 	}
 	for _, wk := range w.Workers {
-		if wk.Pos.L != a.level {
+		if wk.Away != nil {
 			continue
 		}
 		g, col := '@', ui.Col("player")
-		if wk.Kind == "renfield" {
+		switch wk.Kind {
+		case "renfield":
 			g, col = 'r', ui.Col("fix_closet")
+		case "convert":
+			g, col = '&', ui.Col("player")
 		}
 		if wk.Asleep {
 			col = ui.Col("dim")
 		}
-		b.Set(ox+1+wk.Pos.X, oy+1+wk.Pos.Y, g, col, ui.Black)
+		put(wk.Pos, g, col)
 	}
-	// Cursor: invert the cell.
-	c := b.Get(ox+1+a.cx, oy+1+a.cy)
-	b.Set(ox+1+a.cx, oy+1+a.cy, c.Ch, ui.Black, ui.Col("cursor"))
+	// Cursor, or the placement preview.
+	if pl, ok := a.modal.(*placer); ok {
+		f := sim.FixtureByID(pl.id)
+		bg := ui.Col("bg_ok")
+		if a.w.CanPlace(f, sim.Pos{L: a.level, X: a.cx, Y: a.cy}) != nil {
+			bg = ui.Col("bg_bad")
+		}
+		b.Set(ox+1+a.cx, oy+1+a.cy, f.Glyph, ui.Col("bright"), bg)
+	} else {
+		c := b.Get(ox+1+a.cx, oy+1+a.cy)
+		b.Set(ox+1+a.cx, oy+1+a.cy, c.Ch, ui.Black, ui.Col("cursor"))
+	}
 }
 
 type occupant struct {
@@ -302,7 +336,16 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 		if wk.Kind == "renfield" {
 			g, col = "r", ui.Col("fix_closet")
 		}
-		b.PrintN(x, y, trunc(fmt.Sprintf("%s %s: %s", g, firstName(wk.Name), wk.JobLabel()), iw), iw, col, ui.Black)
+		if wk.Kind == "convert" {
+			g = "&"
+		}
+		label := wk.JobLabel()
+		if wk.Away != nil {
+			left := wk.Away.Until - s.Clock
+			label = fmt.Sprintf("away, back in %dh%02dm", left/60, left%60)
+			col = ui.Col("warn")
+		}
+		b.PrintN(x, y, trunc(fmt.Sprintf("%s %s: %s", g, firstName(wk.Name), label), iw), iw, col, ui.Black)
 		y++
 	}
 	alert := ""
@@ -377,8 +420,8 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 func (a *app) drawFooter(y int) {
 	b := a.buf
 	keys := []struct{ k, v string }{
-		{"Spc", "pause"}, {"Tab", "floor"}, {"B", "build"}, {"P", "policy"},
-		{"L", "roster"}, {"I", "stock"}, {"N", "street"}, {"?", "help"},
+		{"Spc", "pause"}, {"Tab", "floor"}, {"B", "build"}, {"G", "out"}, {"P", "policy"},
+		{"L", "roster"}, {"I", "stock"}, {"N", "street"}, {"?", "guide"},
 	}
 	x := 1
 	for i, kv := range keys {

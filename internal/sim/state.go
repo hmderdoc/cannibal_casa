@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 )
@@ -66,6 +67,56 @@ type Worker struct {
 	Starving int     `json:"starving"`
 	Carry    []Item  `json:"carry,omitempty"`
 	Job      *Job    `json:"job,omitempty"`
+	Away     *Errand `json:"away,omitempty"`
+	Role     string  `json:"role,omitempty"`  // Renfields: hand | cook | guard | shill | gimp
+	Meals    int     `json:"meals,omitempty"` // human dishes eaten; enough of them and a Renfield converts
+}
+
+// ConvertMeals is how many dishes it takes before a Renfield asks for
+// seconds, knows, and is in: a fellow cannibal ("convert") who never wavers,
+// eats like one of the family, and goes hunting on their own at night.
+const ConvertMeals = 6
+
+// Renfield roles: forms of forced servitude, each with a job.
+const (
+	RoleHand  = "hand"  // does whatever needs doing
+	RoleCook  = "cook"  // kitchen first
+	RoleGuard = "guard" // patrols the cells: escapes rare, raiders repelled
+	RoleShill = "shill" // works the porch: the lures pull harder
+	RoleGimp  = "gimp"  // lives in the basement: livestock stays quiet and calm
+)
+
+var Roles = []struct{ ID, Name, Desc string }{
+	{RoleHand, "Hand", "General help: feeds, butchers, cooks, carries, disposes. The default."},
+	{RoleCook, "Cook", "Kitchen first. Plates and cooks before anything else; a stocked shelf, always."},
+	{RoleGuard, "Guard", "Patrols the cells and the doors. Escapes drop to a third; raiders on your house face them."},
+	{RoleShill, "Shill", "Stands on the porch being friendly. Every lure pulls harder. Also minds the stand."},
+	{RoleGimp, "Gimp", "Lives in the basement, in the suit. The livestock stops screaming and stops trying the door."},
+}
+
+func RoleName(id string) string {
+	for _, r := range Roles {
+		if r.ID == id {
+			return r.Name
+		}
+	}
+	return "Hand"
+}
+
+// Errand is the cannibal out of the house: working, selling, hunting,
+// scavenging, or raiding another house. The outcome is settled when it
+// starts (the world layer settles raids on players); it lands on return.
+type Errand struct {
+	Kind      string     `json:"kind"`
+	Label     string     `json:"label"`
+	Until     int64      `json:"until"`
+	Cash      int        `json:"cash"`
+	Items     []Item     `json:"items,omitempty"`
+	Livestock *Livestock `json:"livestock,omitempty"`
+	Heat      float64    `json:"heat"`
+	Text      string     `json:"text"`
+	TextKind  string     `json:"text_kind"`
+	Post      string     `json:"post,omitempty"`
 }
 
 // Passerby walks the sidewalk; a lure may pull them onto the porch.
@@ -154,6 +205,9 @@ type Stats struct {
 	Butchered   int `json:"butchered"`
 	Meals       int `json:"meals"`
 	Sold        int `json:"sold"`
+	Errands     int `json:"errands"`
+	Raids       int `json:"raids"`
+	Looted      int `json:"looted"` // cash taken from wallets and houses
 	Buried      int `json:"buried"`
 	Disposed    int `json:"disposed"`
 	Inspections int `json:"inspections"`
@@ -179,6 +233,7 @@ type World struct {
 	Stars int     `json:"stars"`
 
 	Fixtures map[string]bool     `json:"fixtures"`
+	Placed   map[string]Pos      `json:"placed"` // where each owned fixture sits
 	Machines map[string]*Machine `json:"machines"`
 	Policy   Policy              `json:"policy"`
 
@@ -202,6 +257,8 @@ type World struct {
 	NextPasserby int64     `json:"next_passerby"`
 	TrapReady    int64     `json:"trap_ready"`
 
+	LastRaid map[string]int64 `json:"last_raid,omitempty"` // target key -> unix day of the last raid
+
 	Alive     bool       `json:"alive"`
 	Cause     string     `json:"cause,omitempty"`
 	Ancestors []Ancestor `json:"ancestors"`
@@ -221,7 +278,7 @@ const DefaultScale = 60
 // New starts a dynasty: a starter kitchen, one cell, a block, a bed, a mat.
 func New(handle, bbs string, seed int64) *World {
 	w := &World{Version: 2, Handle: handle, BBS: bbs, Generation: 1, Scale: DefaultScale,
-		Cash: 150, Heat: 8, Fixtures: map[string]bool{}, Machines: map[string]*Machine{},
+		Cash: 150, Heat: 8, Fixtures: map[string]bool{}, Placed: map[string]Pos{}, Machines: map[string]*Machine{},
 		Policy: DefaultPolicy(), Alive: true, Seed: seed}
 	w.Clock = 8 * 60 // move in at 8 A.M.
 	w.Born = w.Clock
@@ -229,10 +286,11 @@ func New(handle, bbs string, seed int64) *World {
 	for _, f := range Fixtures {
 		if f.Starter {
 			w.Fixtures[f.ID] = true
+			w.Placed[f.ID] = f.At
 		}
 	}
 	w.Workers = append(w.Workers, &Worker{ID: w.newID(), Name: w.Cannibal, Kind: "cannibal",
-		Pos: SlotPos(FixtureByID("bed")), Hunger: 70, Energy: 90})
+		Pos: w.Pos("bed"), Hunger: 70, Energy: 90})
 	w.NextPasserby = w.Clock + 5
 	// Gladys's welcome casseroles: two days of grace before the machine has to work.
 	for i := 0; i < 2; i++ {
@@ -264,6 +322,53 @@ func (w *World) post(kind, format string, a ...any) {
 }
 
 func (w *World) Has(id string) bool { return w.Fixtures[id] }
+
+// Pos is where an owned fixture sits (its default when unplaced).
+func (w *World) Pos(id string) Pos {
+	if p, ok := w.Placed[id]; ok {
+		return p
+	}
+	if f := FixtureByID(id); f != nil {
+		return f.At
+	}
+	return Pos{}
+}
+
+// FixtureAt returns the owned fixture on a tile, or nil.
+func (w *World) FixtureAt(p Pos) *Fixture {
+	for id, at := range w.Placed {
+		if at == p && w.Fixtures[id] {
+			return FixtureByID(id)
+		}
+	}
+	return nil
+}
+
+// CanPlace reports whether a fixture may go on a tile: plain floor on the
+// fixture's level (the porch for lures, trap and stand), not already taken.
+func (w *World) CanPlace(f *Fixture, p Pos) error {
+	if p.L != f.Level {
+		return fmt.Errorf("the %s goes on the %s", f.Name, f.Level)
+	}
+	if !Plans[p.L].Floor(p.X, p.Y) {
+		return errors.New("that's not floor")
+	}
+	if f.Front && !inPorch(p) {
+		return fmt.Errorf("the %s has to be out front, on the porch", f.Name)
+	}
+	if o := w.FixtureAt(p); o != nil && o.ID != f.ID {
+		return fmt.Errorf("the %s is already there", o.Name)
+	}
+	return nil
+}
+
+// TrapPos is where the mat (or the trapdoor that replaced it) sits.
+func (w *World) TrapPos() Pos {
+	for _, f := range w.ownedOfKind(KindTrap) {
+		return w.Pos(f.ID)
+	}
+	return FrontDoor
+}
 
 // Day, Hour, Minute of the game clock (day 1 is move-in day).
 func (w *World) Day() int    { return int(w.Clock/day) + 1 }
@@ -373,6 +478,17 @@ func (w *World) Renfields() int {
 	n := 0
 	for _, wk := range w.Workers {
 		if wk.Kind == "renfield" {
+			n++
+		}
+	}
+	return n
+}
+
+// RoleCount is how many Renfields hold a role and are home and awake.
+func (w *World) RoleCount(role string) int {
+	n := 0
+	for _, wk := range w.Workers {
+		if wk.Kind != "cannibal" && wk.Role == role && wk.Away == nil {
 			n++
 		}
 	}

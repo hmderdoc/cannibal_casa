@@ -26,7 +26,16 @@ func (w *World) pickJob(wk *Worker) *Job {
 			return j
 		}
 	}
-	for _, f := range []func(*Worker) *Job{w.jobFeed, w.jobCollect, w.jobDispose, w.jobButcher, w.jobCookAny, w.jobStock, w.jobBrainwash} {
+	order := []func(*Worker) *Job{w.jobFeed, w.jobCollect, w.jobDispose, w.jobButcher, w.jobCookAny, w.jobStock, w.jobBrainwash}
+	switch wk.Role {
+	case RoleCook:
+		order = []func(*Worker) *Job{w.jobCollect, w.jobCookAny, w.jobFeed, w.jobStock, w.jobButcher, w.jobDispose, w.jobBrainwash}
+	case RoleGuard, RoleGimp:
+		order = []func(*Worker) *Job{w.jobFeed, w.jobButcher} // stays near the cells; the rest is not their job
+	case RoleShill:
+		order = []func(*Worker) *Job{w.jobStock} // lives on the porch, minds the stand
+	}
+	for _, f := range order {
 		if j := f(wk); j != nil {
 			return j
 		}
@@ -34,8 +43,8 @@ func (w *World) pickJob(wk *Worker) *Job {
 	return w.jobIdle(wk)
 }
 
-func stepTo(f string, work int, do string) Step {
-	return Step{Dest: SlotPos(FixtureByID(f)), Work: work, Do: do}
+func (w *World) stepTo(f string, work int, do string) Step {
+	return Step{Dest: w.Pos(f), Work: work, Do: do}
 }
 
 func (w *World) jobEat(wk *Worker) *Job {
@@ -49,12 +58,12 @@ func (w *World) jobEat(wk *Worker) *Job {
 		return nil
 	}
 	return &Job{Kind: "eat", Label: "getting a plate", Target: w.Pantry[best].ID,
-		Steps: []Step{stepTo("pantry", 0, "take_dish"), stepTo("pantry", 15, "eat")}}
+		Steps: []Step{w.stepTo("pantry", 0, "take_dish"), w.stepTo("pantry", 15, "eat")}}
 }
 
 func (w *World) jobSleep(wk *Worker) *Job {
 	bed := "bed"
-	if wk.Kind == "renfield" {
+	if wk.Kind != "cannibal" {
 		bed = ""
 		for _, f := range []string{"cot", "cot_2"} {
 			if w.Has(f) && !w.bedTaken(f, wk) {
@@ -63,10 +72,14 @@ func (w *World) jobSleep(wk *Worker) *Job {
 			}
 		}
 		if bed == "" {
-			return &Job{Kind: "sleep", Label: "dozing in a corner", Steps: []Step{{Dest: wk.Pos, Do: "sleep"}}}
+			label := "dozing in a corner"
+			if wk.Kind == "convert" {
+				label = "sleeping on the couch, like family"
+			}
+			return &Job{Kind: "sleep", Label: label, Steps: []Step{{Dest: wk.Pos, Do: "sleep"}}}
 		}
 	}
-	return &Job{Kind: "sleep", Label: "going to bed", Machine: bed, Steps: []Step{stepTo(bed, 0, "sleep")}}
+	return &Job{Kind: "sleep", Label: "going to bed", Machine: bed, Steps: []Step{w.stepTo(bed, 0, "sleep")}}
 }
 
 func (w *World) bedTaken(bed string, me *Worker) bool {
@@ -85,7 +98,7 @@ func (w *World) jobFeed(wk *Worker) *Job {
 	for _, l := range w.Livestock {
 		if l.Cell != "" && l.Hunger > 50 && !w.targeted(l.ID) {
 			return &Job{Kind: "feed", Label: "feeding " + l.Name, Target: l.ID,
-				Steps: []Step{stepTo(l.Cell, 5, "feed")}}
+				Steps: []Step{w.stepTo(l.Cell, 5, "feed")}}
 		}
 	}
 	return nil
@@ -110,7 +123,7 @@ func (w *World) jobCollect(wk *Worker) *Job {
 		if m.Output != nil && !m.Reserved {
 			m.Reserved = true
 			return &Job{Kind: "collect", Label: "plating " + RecipeByID(m.Output.Sub).Name, Machine: f.ID,
-				Steps: []Step{stepTo(f.ID, 2, "take_output"), stepTo("pantry", 0, "drop_pantry")}}
+				Steps: []Step{w.stepTo(f.ID, 2, "take_output"), w.stepTo("pantry", 0, "drop_pantry")}}
 		}
 	}
 	return nil
@@ -131,7 +144,7 @@ func (w *World) jobDispose(wk *Worker) *Job {
 			}
 			m.Reserved = true
 			return &Job{Kind: "dispose", Label: "bagging " + e.Sub + " for the " + f.Name, Target: e.ID, Machine: f.ID,
-				Steps: []Step{stepTo("back_step", 0, "take_evidence"), stepTo(f.ID, 3, "load_disposal")}}
+				Steps: []Step{w.stepTo("back_step", 0, "take_evidence"), w.stepTo(f.ID, 3, "load_disposal")}}
 		}
 		if w.Buried < w.PlotCap() {
 			for _, f := range w.ownedOfKind(KindPlot) {
@@ -144,7 +157,7 @@ func (w *World) jobDispose(wk *Worker) *Job {
 				}
 				w.machine(f.ID).Reserved = true
 				return &Job{Kind: "bury", Label: "burying " + e.Sub, Target: e.ID, Machine: f.ID,
-					Steps: []Step{stepTo("back_step", 0, "take_evidence"), stepTo(f.ID, work, "bury")}}
+					Steps: []Step{w.stepTo("back_step", 0, "take_evidence"), w.stepTo(f.ID, work, "bury")}}
 			}
 		}
 	}
@@ -196,8 +209,8 @@ func (w *World) jobButcher(wk *Worker) *Job {
 	}
 	w.machine("block").Reserved = true
 	return &Job{Kind: "butcher", Label: "processing " + pick.Name, Target: pick.ID, Machine: "block",
-		Steps: []Step{stepTo(pick.Cell, 2, "take_livestock"), stepTo("block", work, "butcher"),
-			stepTo("fridge", 0, "drop_cuts"), stepTo("back_step", 0, "drop_bag")}}
+		Steps: []Step{w.stepTo(pick.Cell, 2, "take_livestock"), w.stepTo("block", work, "butcher"),
+			w.stepTo("fridge", 0, "drop_cuts"), w.stepTo("back_step", 0, "drop_bag")}}
 }
 
 func (w *World) frozenCount() int {
@@ -259,7 +272,7 @@ func (w *World) jobCook(wk *Worker, desperate bool) *Job {
 		src, take = "back_step", "take_bones"
 	}
 	return &Job{Kind: "cook", Label: "cooking " + rc.Name, Recipe: rc.ID, Machine: rc.Station,
-		Steps: []Step{stepTo(src, 0, take), stepTo(rc.Station, 10, "start_cook")}}
+		Steps: []Step{w.stepTo(src, 0, take), w.stepTo(rc.Station, 10, "start_cook")}}
 }
 
 func (w *World) hasNeeds(rc *Recipe) bool {
@@ -335,7 +348,7 @@ func (w *World) jobStock(wk *Worker) *Job {
 			continue
 		}
 		return &Job{Kind: "stock", Label: "stocking the stand", Target: d.ID,
-			Steps: []Step{stepTo("pantry", 0, "take_sell"), stepTo("stand", 2, "drop_stand")}}
+			Steps: []Step{w.stepTo("pantry", 0, "take_sell"), w.stepTo("stand", 2, "drop_stand")}}
 	}
 	return nil
 }
@@ -362,18 +375,39 @@ func (w *World) jobBrainwash(wk *Worker) *Job {
 	}
 	m.Reserved = true
 	return &Job{Kind: "brainwash", Label: "walking " + pick.Name + " to The Chair", Target: pick.ID, Machine: "chair",
-		Steps: []Step{stepTo(pick.Cell, 2, "take_livestock"), stepTo("chair", 5, "load_chair")}}
+		Steps: []Step{w.stepTo(pick.Cell, 2, "take_livestock"), w.stepTo("chair", 5, "load_chair")}}
 }
 
 func (w *World) jobIdle(wk *Worker) *Job {
 	r := w.rng()
+	if wk.Kind == "convert" && wk.Role == RoleHand && w.IsNight() && w.freeCell() != "" && wk.Hunger > 30 && r.Intn(100) < 8 {
+		w.autoHunt(wk)
+		return nil
+	}
 	if r.Intn(3) > 0 {
 		return &Job{Kind: "idle", Label: "standing around", Steps: []Step{{Dest: wk.Pos, Work: 10 + r.Intn(20), Do: "noop"}}}
 	}
 	p := Plans[wk.Pos.L]
+	if wk.Role == RoleGuard || wk.Role == RoleGimp {
+		// Guards patrol the cells; the gimp lives among them.
+		cells := w.Cells()
+		if len(cells) > 0 {
+			c := cells[r.Intn(len(cells))]
+			at := w.Pos(c.ID)
+			label := "patrolling the cells"
+			if wk.Role == RoleGimp {
+				label = "keeping the livestock company"
+			}
+			return &Job{Kind: "idle", Label: label, Steps: []Step{{Dest: Pos{at.L, at.X, at.Y + 1}, Work: 20 + r.Intn(30), Do: "noop"}}}
+		}
+	}
+	if wk.Role == RoleShill {
+		at := w.TrapPos()
+		return &Job{Kind: "idle", Label: "working the porch", Steps: []Step{{Dest: Pos{at.L, at.X - 1, at.Y}, Work: 30 + r.Intn(30), Do: "noop"}}}
+	}
 	for i := 0; i < 20; i++ {
 		x, y := wk.Pos.X+r.Intn(13)-6, wk.Pos.Y+r.Intn(7)-3
-		if p.Walkable(x, y) && p.At(x, y) != '-' && p.SlotAt(x, y) == 0 {
+		if p.Floor(x, y) && w.FixtureAt(Pos{wk.Pos.L, x, y}) == nil {
 			return &Job{Kind: "idle", Label: "pacing", Steps: []Step{{Dest: Pos{wk.Pos.L, x, y}, Work: 5, Do: "noop"}}}
 		}
 	}
@@ -420,6 +454,13 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 					}
 				} else {
 					wk.Loyalty = clampF(wk.Loyalty+2, 0, 100)
+					wk.Meals++
+					if wk.Kind == "renfield" && wk.Meals >= ConvertMeals && wk.Loyalty >= 40 {
+						wk.Kind = "convert"
+						wk.Loyalty = 100
+						w.say("good", "%s asked for seconds. %s knows what it is. %s is in. A fellow cannibal.", wk.Name, wk.Name, wk.Name)
+						w.post("info", "'s roommate has started grilling on weeknights. Big smile. Doesn't blink much.")
+					}
 				}
 				return true
 			}

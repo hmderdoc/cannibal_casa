@@ -173,7 +173,20 @@ func runSnapshot(cfg config, bbs, handle string, cols, rows, days int) {
 	if days > 0 && a.w != nil {
 		a.w.Cash = 2000
 		for _, id := range []string{"lure_couch", "cell_2", "grinder", "microwave", "compost", "fence", "chair", "cot", "smoker"} {
-			a.w.Build(id)
+			f := sim.FixtureByID(id)
+			p := sim.Plans[f.Level]
+			for y := 0; y < len(p.Rows); y++ {
+				placed := false
+				for x := 0; x < len(p.Rows[y]); x++ {
+					if a.w.Build(id, sim.Pos{L: f.Level, X: x, Y: y}) == nil {
+						placed = true
+						break
+					}
+				}
+				if placed {
+					break
+				}
+			}
 		}
 		a.w.Policy.Brainwash = true
 		for d := 0; d < days; d++ {

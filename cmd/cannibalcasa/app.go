@@ -161,6 +161,8 @@ func (a *app) handleKey(k key) {
 		a.speed = 4
 	case 'b', 'B':
 		a.openBuild("")
+	case 'g', 'G':
+		a.openGoOut()
 	case 'p', 'P':
 		a.openPolicy()
 	case 'l', 'L':
@@ -220,28 +222,89 @@ func (a *app) inspectCursor() {
 			return
 		}
 	}
-	slot := p.SlotAt(a.cx, a.cy)
-	if slot == 0 {
+	if f := a.w.FixtureAt(pos); f != nil {
+		a.openFixture(f)
 		return
 	}
-	fs := sim.FixturesAtSlot(a.level, slot)
-	var owned *sim.Fixture
-	for _, f := range fs {
-		if a.w.Has(f.ID) {
-			owned = f
+	if p.Floor(a.cx, a.cy) {
+		a.openBuild("")
+	}
+}
+
+// placer is placement mode: the cursor carries a fixture; Enter drops it.
+type placer struct {
+	id   string
+	move bool
+}
+
+func (pl *placer) key(a *app, k key) {
+	switch k {
+	case keyEsc, 'q', 'Q':
+		a.modal = nil
+	case keyUp, 'w', 'W':
+		a.moveCursor(0, -1)
+	case keyDown, 's', 'S':
+		a.moveCursor(0, 1)
+	case keyLeft, 'a', 'A':
+		a.moveCursor(-1, 0)
+	case keyRight, 'd', 'D':
+		a.moveCursor(1, 0)
+	case keyTab, '>', '.':
+		a.switchLevel(1)
+	case '<', ',':
+		a.switchLevel(-1)
+	case keyEnter, ' ':
+		at := sim.Pos{L: a.level, X: a.cx, Y: a.cy}
+		kind := "build"
+		if pl.move {
+			kind = "move"
+		}
+		if a.do(sim.Command{Kind: kind, Name: pl.id, At: &at}) {
+			a.modal = nil
 		}
 	}
-	if owned != nil {
-		a.openFixture(owned)
-		return
+}
+
+func (pl *placer) draw(a *app, b *ui.Buffer) {
+	f := sim.FixtureByID(pl.id)
+	verb := "Place"
+	if pl.move {
+		verb = "Move"
 	}
-	for _, f := range fs {
-		if f.Prereq == "" || a.w.Has(f.Prereq) {
-			a.openBuild(f.ID)
-			return
+	where := f.Level.String()
+	if f.Front {
+		where = "the porch"
+	}
+	msg := fmt.Sprintf(" %s the %s: arrows move, Enter drops it, Esc cancels. Goes on %s. ", verb, f.Name, where)
+	if err := a.w.CanPlace(f, sim.Pos{L: a.level, X: a.cx, Y: a.cy}); err != nil {
+		msg = fmt.Sprintf(" %s the %s: %s. Esc cancels. ", verb, f.Name, capitalize(err.Error()))
+	}
+	b.PrintN(0, b.H-1, msg, b.W, ui.Col("bright"), ui.Col("sel_bg"))
+}
+
+// startPlacing enters placement mode on the fixture's level, cursor on a
+// sensible first tile.
+func (a *app) startPlacing(id string, move bool) {
+	f := sim.FixtureByID(id)
+	a.level = f.Level
+	if move {
+		at := a.w.Pos(id)
+		a.cx, a.cy = at.X, at.Y
+	} else if f.Front {
+		a.cx, a.cy = 2, 3
+	} else {
+		p := a.plan()
+		found := false
+		for y := 0; y < len(p.Rows) && !found; y++ {
+			for x := 0; x < len(p.Rows[y]) && !found; x++ {
+				if a.w.CanPlace(f, sim.Pos{L: f.Level, X: x, Y: y}) == nil {
+					a.cx, a.cy = x, y
+					found = true
+				}
+			}
 		}
 	}
-	a.openBuild(fs[0].ID)
+	a.modal = &placer{id: id, move: move}
 }
 
 func trapOdds(w *sim.World, v *sim.Victim) int {
@@ -282,8 +345,14 @@ func visitorText(v *sim.Visitor) string {
 
 func describeWorker(wk *sim.Worker) []sim.Line {
 	kind := "The cannibal of the house."
-	if wk.Kind == "renfield" {
-		kind = fmt.Sprintf("A Renfield, formerly a %s. Loyalty %.0f.", strings.ToLower(sim.VictimByID(wk.Victim).Name), wk.Loyalty)
+	switch wk.Kind {
+	case "renfield":
+		kind = fmt.Sprintf("A Renfield (%s), formerly a %s. Loyalty %.0f. %d of %d meals toward becoming one of the family.", strings.ToLower(sim.RoleName(wk.Role)), strings.ToLower(sim.VictimByID(wk.Victim).Name), wk.Loyalty, wk.Meals, sim.ConvertMeals)
+	case "convert":
+		kind = fmt.Sprintf("A fellow cannibal (%s), formerly a %s. Loyal for life. Eats like family, hunts at night on their own.", strings.ToLower(sim.RoleName(wk.Role)), strings.ToLower(sim.VictimByID(wk.Victim).Name))
+	}
+	if wk.Away != nil {
+		return []sim.Line{{Kind: "info", Text: kind}, {Kind: "warn", Text: fmt.Sprintf("Out: %s.", wk.Away.Label)}}
 	}
 	return []sim.Line{
 		{Kind: "info", Text: kind},

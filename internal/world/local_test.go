@@ -64,7 +64,7 @@ func TestLocalNeighborhood(t *testing.T) {
 
 	// Commands persist and post.
 	a.Cash = 1000
-	w, err := l.Do("bbs1", "Alice", sim.Command{Kind: "build", Name: "cell_2"})
+	w, err := l.Do("bbs1", "Alice", sim.Command{Kind: "build", Name: "cell_2", At: &sim.Pos{L: sim.Basement, X: 8, Y: 1}})
 	if err != nil || !w.Has("cell_2") {
 		t.Fatalf("do: %v", err)
 	}
@@ -72,6 +72,17 @@ func TestLocalNeighborhood(t *testing.T) {
 	last := hood.Feed[len(hood.Feed)-1]
 	if last.Handle != "Alice" || last.Text == "" {
 		t.Fatalf("cell post missing: %+v", hood.Feed)
+	}
+	// A raid on Bob settles now and lands when Alice gets home.
+	a.Cash = 500
+	if _, err := l.Raid("bbs1", "Alice", Key("bbs2", "Bob")); err != nil {
+		t.Fatalf("raid: %v", err)
+	}
+	if _, err := l.Raid("bbs1", "Alice", Key("bbs2", "Bob")); err == nil {
+		t.Fatal("second raid the same day should be refused")
+	}
+	if a.Player().Away == nil {
+		t.Fatal("alice should be out raiding")
 	}
 	// Leave saves; a fresh Local reloads the same clock.
 	l.Leave("bbs1", "Alice")

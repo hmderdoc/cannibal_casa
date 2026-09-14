@@ -56,6 +56,23 @@ and tune a factory and watch it run on a roguelike-style map, in color.
 - **Cash.** The curb stand sells one marked item an hour, nine to six. The
   garden, an Airbnb listing and Etsy soap pay daily. Utilities drain hourly.
 
+## Placement, errands, servitude
+
+- **Free placement.** A fixture goes on any floor tile of its level (lures,
+  the trap and the stand on the porch). Moving is free and instant. Workers
+  walk between fixtures, so the layout is the throughput.
+- **Going out.** The cannibal leaves for a few hours: a mall shift for cash,
+  a market run that sells everything at once, a hunt, a scavenge, a raid on
+  a CPU house or a player's house. The house runs on policy meanwhile.
+  Raids on players are settled by the neighborhood layer against the
+  target's defenses and land when the raider gets home; the target hears.
+- **Wallets.** Every captured guest carries cash. That, the stand, and
+  errands are the economy; feed and utilities are the drain.
+- **Roles.** Renfields are assigned a form of servitude: hand, cook, guard
+  (escapes and raiders), shill (lures pull harder), gimp (the basement goes
+  quiet). A Renfield who eats six dishes converts: a fellow cannibal, loyal
+  for life, eating like family, hunting at night on their own.
+
 ## The door
 
 Cursor over the map; Enter looks at whatever is there (a worker's job, a

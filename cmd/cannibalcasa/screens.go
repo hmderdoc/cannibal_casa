@@ -398,10 +398,10 @@ func (a *app) openFixture(f *sim.Fixture) {
 			a.openFixture(f)
 		}})
 	}
-	// Upgrades that share this slot.
-	for _, u := range sim.FixturesAtSlot(f.Level, f.Slot) {
-		if !a.w.Has(u.ID) && (u.Prereq == "" || a.w.Has(u.Prereq)) {
-			u := u
+	// Upgrades that replace this fixture in place.
+	for up, old := range replaces {
+		u := sim.FixtureByID(up)
+		if old == f.ID && u != nil && !a.w.Has(u.ID) && (u.Prereq == "" || a.w.Has(u.Prereq)) {
 			items = append(items, item{label: fmt.Sprintf("Upgrade: %s ($%d)", u.Name, u.Cost), color: ui.Col("cash"),
 				desc: []sim.Line{{Kind: "info", Text: u.Desc}}, onSelect: func(a *app) { a.openBuild(u.ID) }})
 		}
@@ -409,6 +409,8 @@ func (a *app) openFixture(f *sim.Fixture) {
 	if f.ID == "chair" {
 		items = append(items, item{label: "Policy: brainwashing " + onOff(a.w.Policy.Brainwash), desc: status, onSelect: func(a *app) { a.openPolicy() }})
 	}
+	items = append(items, item{label: "Move it", color: ui.Col("key"), desc: append([]sim.Line{{Kind: "info", Text: "Pick it up and put it somewhere closer to whatever it works with. Workers walk; distance is throughput."}}, status...),
+		onSelect: func(a *app) { a.startPlacing(f.ID, true) }})
 	items = append(items, item{label: "Close", desc: status, onSelect: func(a *app) { a.modal = nil }})
 	a.modal = newMenu(f.Name, items)
 }
@@ -441,9 +443,13 @@ func (a *app) openBuild(focus string) {
 			}
 			it.desc = desc
 			it.onSelect = func(a *app) {
-				if a.do(sim.Command{Kind: "build", Name: f.ID}) {
-					a.modal = nil
+				if _, replaced := replaces[f.ID]; replaced {
+					if a.do(sim.Command{Kind: "build", Name: f.ID}) {
+						a.modal = nil
+					}
+					return
 				}
+				a.startPlacing(f.ID, false)
 			}
 			if f.ID == focus {
 				sel = len(items)
@@ -451,11 +457,111 @@ func (a *app) openBuild(focus string) {
 			items = append(items, it)
 		}
 	}
-	m := newMenu(fmt.Sprintf("Build ─ $%.0f", w.Cash), items)
+	m := newMenu(fmt.Sprintf("Build ─ $%.0f ─ pick something, then pick a tile", w.Cash), items)
 	if sel >= 0 {
 		m.sel = sel
 	}
 	a.modal = m
+}
+
+var replaces = map[string]string{"trapdoor_pro": "welcome_mat", "stand_big": "stand"}
+
+// ---------------------------------------------------------------------------
+// going out
+// ---------------------------------------------------------------------------
+
+func (a *app) openGoOut() {
+	w := a.w
+	p := w.Player()
+	if p == nil {
+		return
+	}
+	if p.Away != nil {
+		left := p.Away.Until - w.Clock
+		a.modal = textPanel("You're out", []sim.Line{{Kind: "warn", Text: fmt.Sprintf("%s: back in %dh%02dm. The house runs itself meanwhile.", capitalize(p.Away.Label), left/60, left%60)}})
+		return
+	}
+	var items []item
+	for _, e := range sim.Errands {
+		e := e
+		desc := []sim.Line{{Kind: "info", Text: e.Desc}}
+		switch e.ID {
+		case "market":
+			n, total := 0, 0
+			for _, d := range w.Stand {
+				n++
+				total += sim.RecipeByID(d.Sub).Price + 5*(d.Quality-3)
+			}
+			spare := 0
+			for _, d := range w.Pantry {
+				if sim.RecipeByID(d.Sub).Food {
+					spare++
+				}
+			}
+			spare -= w.Policy.PantryTarget
+			for _, d := range w.Pantry {
+				rc := sim.RecipeByID(d.Sub)
+				if rc.Price > 0 && w.Policy.Sell[rc.ID] && (!rc.Food || spare > 0) {
+					n++
+					total += rc.Price + 5*(d.Quality-3)
+					if rc.Food {
+						spare--
+					}
+				}
+			}
+			desc = append(desc, sim.Line{Kind: "cash", Text: fmt.Sprintf("Right now: %d item(s), about $%d.", n, total)})
+		case "hunt":
+			desc = append(desc, sim.Line{Kind: "heat", Text: fmt.Sprintf("Free cells: %d. It is %s.", freeCells(w), map[bool]string{true: "night, good", false: "daytime, worse odds"}[w.IsNight()])})
+		case "raid":
+			desc = append(desc, sim.Line{Kind: "heat", Text: "Pick a house on the street, or a CPU house nobody will miss. Once per house per real day."})
+		}
+		items = append(items, item{label: fmt.Sprintf("%-32s %dh", e.Name, e.Hours), color: ui.Col("warn"), desc: desc, onSelect: func(a *app) {
+			if e.ID == "raid" {
+				a.openRaidPicker()
+				return
+			}
+			if a.do(sim.Command{Kind: "errand", Name: e.ID}) {
+				a.modal = nil
+			}
+		}})
+	}
+	a.modal = newMenu(fmt.Sprintf("Go out ─ $%.0f in hand, hunger %.0f", w.Cash, p.Hunger), items)
+}
+
+func freeCells(w *sim.World) int {
+	n := len(w.Cells()) - len(w.Livestock)
+	if n < 0 {
+		n = 0
+	}
+	return n
+}
+
+func (a *app) openRaidPicker() {
+	me := world.Key(a.bbs, a.handle)
+	items := []item{{label: "A house down the street (CPU)", color: ui.Col("warn"),
+		desc: []sim.Line{{Kind: "info", Text: "The Hendersons, the Nguyens, the model home. 55% for $30-90 and something from the freezer; else a doorbell cam and Heat +8."}},
+		onSelect: func(a *app) {
+			if a.do(sim.Command{Kind: "errand", Name: "raid"}) {
+				a.modal = nil
+			}
+		}}}
+	if hood, err := a.be.Neighborhood(a.bbs, a.handle); err == nil {
+		for _, n := range hood.Neighbors {
+			n := n
+			if n.Key == me {
+				continue
+			}
+			items = append(items, item{label: fmt.Sprintf("%-24s %s@%s  %d stars", trunc(n.Cannibal, 24), n.Handle, n.BBS, n.Stars), color: ui.Col("heat"),
+				desc: []sim.Line{{Kind: "info", Text: "Their cameras, fence, doorbell and anyone awake fight back; your van and chemistry set help. Win: 15% of their cash (max $100) and a few things from their kitchen. Lose: Heat +10."}},
+				onSelect: func(a *app) {
+					w, err := a.be.Raid(a.bbs, a.handle, n.Key)
+					if a.take(w, err) {
+						a.modal = nil
+					}
+				}})
+		}
+	}
+	a.modal = newMenu("Raid whose house?", items)
 }
 
 // ---------------------------------------------------------------------------
@@ -563,8 +669,20 @@ func (a *app) openRoster() {
 		if wk.Kind == "renfield" {
 			col, kind = ui.Col("fix_closet"), fmt.Sprintf("Renfield, loyalty %.0f", wk.Loyalty)
 		}
-		items = append(items, item{label: fmt.Sprintf("%-12s %-26s hunger %3.0f energy %3.0f", wk.Name, kind, wk.Hunger, wk.Energy), color: col,
-			desc: describeWorker(wk), onSelect: func(a *app) { a.modal = textPanel(wk.Name, describeWorker(wk)) }})
+		if wk.Kind == "convert" {
+			col, kind = ui.Col("player"), "fellow cannibal, "+strings.ToLower(sim.RoleName(wk.Role))
+		} else if wk.Kind == "renfield" {
+			kind = fmt.Sprintf("Renfield %s, loyalty %.0f, %d/%d meals", strings.ToLower(sim.RoleName(wk.Role)), wk.Loyalty, wk.Meals, sim.ConvertMeals)
+		}
+		items = append(items, item{label: fmt.Sprintf("%-12s %-30s hunger %3.0f energy %3.0f", wk.Name, trunc(kind, 30), wk.Hunger, wk.Energy), color: col,
+			desc: append(describeWorker(wk), sim.Line{Kind: "dim", Text: map[bool]string{true: "Enter: assign a role.", false: ""}[wk.Kind != "cannibal"]}),
+			onSelect: func(a *app) {
+				if wk.Kind == "cannibal" {
+					a.modal = textPanel(wk.Name, describeWorker(wk))
+					return
+				}
+				a.openRoles(wk)
+			}})
 	}
 	items = append(items, item{label: fmt.Sprintf("LIVESTOCK %d/%d", len(w.Livestock), len(w.Cells())), header: true})
 	for _, l := range w.Livestock {
@@ -581,6 +699,24 @@ func (a *app) openRoster() {
 			desc: []sim.Line{{Kind: "dim", Text: v.Flavor}, {Kind: "info", Text: fmt.Sprintf("Fight %d. Processed at marbling %d per policy.", v.Fight, w.Policy.ButcherMarbling)}}})
 	}
 	a.modal = newMenu("Roster", items)
+}
+
+func (a *app) openRoles(wk *sim.Worker) {
+	var items []item
+	for _, r := range sim.Roles {
+		r := r
+		label := r.Name
+		if wk.Role == r.ID || (wk.Role == "" && r.ID == sim.RoleHand) {
+			label += "  (current)"
+		}
+		items = append(items, item{label: label, color: ui.Col("fix_closet"), desc: []sim.Line{{Kind: "info", Text: r.Desc}},
+			onSelect: func(a *app) {
+				if a.do(sim.Command{Kind: "role", ID: wk.ID, Name: r.ID}) {
+					a.openRoster()
+				}
+			}})
+	}
+	a.modal = newMenu("What is "+wk.Name+" for?", items)
 }
 
 func (a *app) openInventory() {
@@ -764,24 +900,6 @@ func (a *app) openOptions() {
 			desc: []sim.Line{{Kind: "info", Text: "Set by the sysop (time_scale in cannibalcasa.ini). The house runs at this rate whether or not you're here."}}},
 	}
 	a.modal = newMenu("Options", items)
-}
-
-func (a *app) openHelp() {
-	lines := []sim.Line{
-		{Kind: "title", Text: "The house is a machine. Feed it people, keep it quiet, keep it fed."},
-		{Kind: "info", Text: ""},
-		{Kind: "good", Text: "THE CLOCK  Runs on its own, here or not. Space pauses while you're at the controls; 1, 2, 3 set 1x, 2x, 4x. Machines, meat and Heat all move in game minutes."},
-		{Kind: "food", Text: "INTAKE  Passers-by walk the sidewalk. A lure pulls one to the porch; the mat drops them into a free cell. No free cell, no drop. Fed livestock fattens (marbling) until policy says butcher."},
-		{Kind: "food", Text: "WORKERS  You and any Renfields do the jobs on your own: feed, butcher, carry cuts to the fridge, cook at stations, plate to the shelf, eat, sleep, haul bags out back and dispose of them. Move the cursor onto anyone and press Enter to see what they're doing."},
-		{Kind: "heat", Text: "HEAT  Bags on the step, cars at the curb, hungry screaming, missing-person reports, failed traps and loud machines raise it. Time, fences, curtains and dinner parties lower it. Cross a tier and a visitor comes to the front door; what they can see is what counts. 100 is the raid."},
-		{Kind: "cash", Text: "CASH  The curb stand sells what policy marks for sale, an item an hour. Fritters need no gear; pies need the grinder. Feed costs $4 a head a day; every appliance draws a little power."},
-		{Kind: "fix_closet", Text: "RENFIELDS  The Chair (6h) turns a guest into a worker who needs a cot, food, and a TV to stay loyal. A disloyal Renfield walks to the police."},
-		{Kind: "warn", Text: "AWAY  Nothing changes when you log off. A week away is a week of the machine running your policy. Come back to full freezers or to sirens."},
-		{Kind: "info", Text: "THE STREET (N)  Every player on the cul-de-sac, the feed, casseroles (from Inventory), anonymous tips."},
-		{Kind: "info", Text: ""},
-		{Kind: "dim", Text: "Keys: arrows/WASD cursor · Enter look/build/toggle · Tab floor · Space pause · 1-3 speed · B build · P policy · L roster · I inventory · N street · O options · Q quit"},
-	}
-	a.modal = textPanel("How to Cannibal", lines)
 }
 
 func deathScreen(a *app) *panel {

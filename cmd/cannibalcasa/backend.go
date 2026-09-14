@@ -101,6 +101,11 @@ func (r *remote) Tip(bbs, handle, toKey string) (*sim.World, error) {
 	return resp.World, err
 }
 
+func (r *remote) Raid(bbs, handle, toKey string) (*sim.World, error) {
+	resp, err := r.call(proto.Request{Type: proto.Raid, To: toKey})
+	return resp.World, err
+}
+
 func (r *remote) Leave(bbs, handle string) error { return nil }
 
 func (r *remote) Close() error {

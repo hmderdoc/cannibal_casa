@@ -30,7 +30,7 @@ func TestWorkersNeverStrand(t *testing.T) {
 	w := New("t", "b", 3)
 	w.Cash = 3000
 	for _, id := range []string{"lure_couch", "lure_wifi", "cell_2", "cell_3", "grinder", "stand_big", "microwave", "compost", "stockpot", "chair", "cot", "freezer", "smoker", "fence"} {
-		if err := w.Build(id); err != nil {
+		if err := w.Build(id, w.freeTile(FixtureByID(id))); err != nil {
 			t.Fatalf("build %s: %v", id, err)
 		}
 	}
@@ -114,13 +114,71 @@ func TestRaidAndInheritance(t *testing.T) {
 func TestBuildReplacesTrap(t *testing.T) {
 	w := New("t", "b", 1)
 	w.Cash = 1000
-	if err := w.Build("trapdoor_pro"); err != nil {
+	mat := w.Pos("welcome_mat")
+	if err := w.Build("trapdoor_pro", Pos{}); err != nil {
 		t.Fatal(err)
 	}
-	if w.Has("welcome_mat") || !w.Has("trapdoor_pro") {
-		t.Fatal("upgrade should replace the mat in its slot")
+	if w.Has("welcome_mat") || !w.Has("trapdoor_pro") || w.Pos("trapdoor_pro") != mat {
+		t.Fatal("upgrade should replace the mat on its tile")
 	}
-	if err := w.Build("chest_freezer"); err == nil {
+	if err := w.Build("chest_freezer", Pos{Ground, 20, 3}); err == nil {
 		t.Fatal("prereq should block")
 	}
+	if err := w.Build("lure_couch", Pos{Ground, 20, 7}); err == nil {
+		t.Fatal("lures must go on the porch")
+	}
+	if err := w.Build("cell_2", Pos{Ground, 20, 7}); err == nil {
+		t.Fatal("cells must go in the basement")
+	}
+	if err := w.Build("lure_couch", w.Pos("stand")); err == nil {
+		t.Fatal("can't stack on the stand")
+	}
+	if err := w.Move("fridge", Pos{Ground, 30, 7}); err != nil {
+		t.Fatal(err)
+	}
+	if w.Pos("fridge") != (Pos{Ground, 30, 7}) {
+		t.Fatal("move didn't stick")
+	}
+}
+
+func TestErrandsRoundTrip(t *testing.T) {
+	w := New("t", "b", 4)
+	cash := w.Cash
+	if err := w.StartErrand("work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.StartErrand("scrap"); err == nil {
+		t.Fatal("can't leave twice")
+	}
+	p := w.Player()
+	if p.Away == nil {
+		t.Fatal("not away")
+	}
+	w.Advance(4*60 + 5)
+	if p.Away != nil || w.Cash <= cash {
+		t.Fatalf("didn't come home paid: away=%v cash %.0f -> %.0f", p.Away, cash, w.Cash)
+	}
+	w.Advance(day)
+	e := &Errand{Kind: "raid", Label: "raiding a neighbor", Cash: 50, Heat: 0, Text: "Got in and out.", TextKind: "cash"}
+	if err := w.StartRaid(e); err != nil {
+		t.Fatal(err)
+	}
+	w.Advance(5*60 + 5)
+	if w.Stats.Raids != 1 || w.Player().Away != nil {
+		t.Fatal("raid didn't resolve")
+	}
+}
+
+// freeTile finds a legal tile for a fixture, for tests.
+func (w *World) freeTile(f *Fixture) Pos {
+	p := Plans[f.Level]
+	for y, row := range p.Rows {
+		for x := range row {
+			pos := Pos{f.Level, x, y}
+			if w.CanPlace(f, pos) == nil {
+				return pos
+			}
+		}
+	}
+	return Pos{}
 }

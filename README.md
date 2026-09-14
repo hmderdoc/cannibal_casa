@@ -23,10 +23,18 @@ It runs on one clock, at `time_scale` game minutes per real minute, whether
 you're watching or not. Log off for a day and the house runs two game months
 on your policy. Come back to full freezers or to sirens.
 
-You don't walk around. You move a cursor, look at things, build, switch
-machines on and off, and set policy: butcher at what marbling, keep how many
-meals on the shelf, which recipes go to the stand, whether The Chair turns
-guests into workers. Then you watch it run, in color, on a roguelike map.
+You don't walk around. You move a cursor, look at things, build machines on
+any tile (and move them: workers walk, so layout is throughput), switch them
+on and off, and set policy: butcher at what marbling, keep how many meals on
+the shelf, which recipes go to the stand, whether The Chair turns guests into
+workers. Then you watch it run, in color, on a roguelike map.
+
+Money comes from the wallets of the people who drop through the mat, from
+the curb stand, and from going out: a shift at the mall, a market run,
+hunting, scavenging, or raiding another house on the street, CPU or player.
+Renfields take roles (hand, cook, guard, shill, gimp), and one that eats
+enough of what the house serves becomes a fellow cannibal who hunts on their
+own.
 
 Death is inheritance: a raid or starvation ends this cannibal, and a relative
 takes the house with its fixtures, half the cash, and empty cells.
@@ -74,10 +82,11 @@ and says so.
 ## Keys
 
 Arrows or WASD move the cursor; `Enter` looks at whatever is under it (a
-worker's job, a passer-by's odds, a machine's status and switch, a build
-offer on an empty slot). `Tab` changes floor. `Space` pauses while you're at
-the controls; `1` `2` `3` run at 1x, 2x, 4x. `B` build, `P` policy, `L`
-roster, `I` inventory, `N` the street, `O` options, `?` help, `Q` quit.
+worker's job, a passer-by's odds, a machine's status, switch and Move, or
+the build list on empty floor). `Tab` changes floor. `Space` pauses while
+you're at the controls; `1` `2` `3` run at 1x, 2x, 4x. `B` build then place
+with the cursor, `G` go out, `P` policy, `L` roster and roles, `I`
+inventory, `N` the street, `O` options, `?` the guide, `Q` quit.
 
 ## Development
 

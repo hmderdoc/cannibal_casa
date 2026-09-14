@@ -109,6 +109,9 @@ func serve(nc net.Conn, w *world.Local, token string) {
 		case proto.Tip:
 			st, err := w.Tip(bbs, handle, req.To)
 			resp = wrap(err, st)
+		case proto.Raid:
+			st, err := w.Raid(bbs, handle, req.To)
+			resp = wrap(err, st)
 		case proto.Bye:
 			return
 		default:

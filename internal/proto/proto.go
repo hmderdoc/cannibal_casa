@@ -24,6 +24,7 @@ const (
 	Hood      = "hood"
 	Casserole = "casserole"
 	Tip       = "tip"
+	Raid      = "raid"
 	Bye       = "bye"
 )
 
