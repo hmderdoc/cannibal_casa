@@ -75,6 +75,8 @@ var Palette = map[string]Attr{
 	"bg_yard":     Attr{2, 22},
 	"bg_attic":    Attr{3, 58},
 	"bg_porch":    Attr{0, 236},
+	"bg_mall":     Attr{5, 53},
+	"wall_mall":   Pink,
 	"bg_busy":     Attr{4, 24},
 	"bg_full":     Attr{1, 88},
 	"bg_cell":     Attr{1, 52},

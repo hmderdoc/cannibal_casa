@@ -22,10 +22,10 @@ type plan struct {
 
 var plans = []plan{
 	{"hermit", nil, nil},
-	{"tidy", []string{"microwave", "stockpot", "plot_2", "compost", "fence"}, nil},
-	{"factory", []string{"lure_couch", "microwave", "grinder", "stand", "stockpot", "cell_2", "compost", "freezer", "fence", "shed", "cell_3", "soundproof", "gruel", "curtains", "smoker", "chair", "cot", "cameras"},
+	{"tidy", []string{"microwave", "stockpot", "plot", "compost", "fence"}, nil},
+	{"factory", []string{"lure_couch", "microwave", "grinder", "stand", "stockpot", "cell", "compost", "freezer", "fence", "shed", "cell", "soundproof", "gruel", "curtains", "smoker", "chair", "cot", "cameras"},
 		func(w *sim.World) { w.Policy.Brainwash = true }},
-	{"sweeney", []string{"grinder", "stand", "microwave", "lure_openhouse", "stockpot", "compost", "fence", "dining_set", "wine_rack", "cell_2", "freezer", "knife_set", "curtains", "cell_3", "chair", "vhs", "cot", "big_tv", "smoker", "cameras", "trapdoor_pro"},
+	{"sweeney", []string{"grinder", "stand", "microwave", "lure_openhouse", "stockpot", "compost", "fence", "dining_set", "wine_rack", "cell", "freezer", "knife_set", "curtains", "cell", "chair", "vhs", "cot", "big_tv", "smoker", "cameras", "trapdoor_pro"},
 		func(w *sim.World) { w.Policy.Brainwash = true; w.Policy.PantryTarget = 4 }},
 }
 
@@ -62,7 +62,11 @@ func main() {
 			for d := 0; d < *days && w.Alive; d++ {
 				for _, id := range p.order {
 					f := sim.FixtureByID(id)
-					if !w.Has(id) && w.Cash >= float64(f.Cost+40) {
+					owned := w.Has(id)
+					if f.Repeat {
+						owned = w.Instances(id) >= 3
+					}
+					if !owned && w.Cash >= float64(w.NextCost(f)+40) {
 						w.Build(id, freeTile(w, f))
 					}
 				}

@@ -196,6 +196,7 @@ const (
 	KindChair     = "chair"     // brainwashing
 	KindBlock     = "block"     // butcher station
 	KindVan       = "van"       // hauls cars
+	KindBooth     = "booth"     // sells at the mall to passing customers
 )
 
 // Fixture is something you can own. Level says which floor it may be placed
@@ -221,6 +222,8 @@ type Fixture struct {
 	Draw     float64  // utilities, $/hour
 	Accepts  []string // disposal: evidence kinds it takes
 	Draws    []string // lure: traits it appeals to
+	Repeat   bool     // may be built any number of times ("cell#3"), each costing CostStep more
+	CostStep int
 	Desc     string
 }
 
@@ -303,33 +306,21 @@ var Fixtures = []Fixture{
 	{ID: "lye_tub", Name: "Plastic Tub of Lye", Level: Ground, AlsoOn: []Level{Backyard}, Cost: 150, Glyph: 'l', Color: "fix_garage", Kind: KindDisposal, Duration: 720, Accepts: []string{"bones", "clothes"},
 		Desc: "Twelve hours per item, silent. Plastic, not ceramic. You've seen the show."},
 	// --- basement ----------------------------------------------------------
-	{ID: "cell_1", Name: "Cell 1", Level: Basement, At: Pos{Basement, 3, 1}, Cost: 0, Glyph: 'n', Color: "fix_cell", Kind: KindCell, Starter: true,
-		Desc: "A cot, a bucket, a motivational poster."},
-	{ID: "cell_2", Name: "Cell 2", Level: Basement, Cost: 100, Prereq: "cell_1", Glyph: 'n', Color: "fix_cell", Kind: KindCell,
-		Desc: "Dug over a weekend. The neighbors assumed a wine cellar."},
-	{ID: "cell_3", Name: "Cell 3", Level: Basement, Cost: 200, Prereq: "cell_2", Glyph: 'n', Color: "fix_cell", Kind: KindCell,
-		Desc: "Now it's a wing."},
-	{ID: "cell_4", Name: "Cell 4", Level: Basement, Cost: 350, Prereq: "cell_3", Glyph: 'n', Color: "fix_cell", Kind: KindCell,
-		Desc: "Structural engineer said no. Structural engineer is in cell 4."},
-	{ID: "cell_5", Name: "Cell 5", Level: Basement, Cost: 500, Prereq: "cell_4", Glyph: 'n', Color: "fix_cell", Kind: KindCell,
-		Desc: "The HOA would call it an unpermitted ADU."},
+	{ID: "cell", Name: "Cell", Level: Basement, At: Pos{Basement, 3, 1}, Cost: 100, CostStep: 75, Glyph: 'n', Color: "fix_cell", Kind: KindCell, Starter: true, Repeat: true,
+		Desc: "A cot, a bucket, a motivational poster. Dig another whenever there's floor; each one costs a little more."},
 	{ID: "block", Name: "Butcher Block", Level: Basement, At: Pos{Basement, 35, 3}, Cost: 0, Glyph: 'K', Color: "fix_kitchen", Kind: KindBlock, Duration: 60, Starter: true,
 		Desc: "An hour per body. Cuts go up to the fridge, the rest goes out the back."},
-	{ID: "soundproof", Name: "Soundproofing", Level: Basement, Cost: 180, Prereq: "cell_1", Glyph: '#', Color: "fix_cell", Kind: KindPassive,
+	{ID: "soundproof", Name: "Soundproofing", Level: Basement, Cost: 180, Prereq: "cell", Glyph: '#', Color: "fix_cell", Kind: KindPassive,
 		Desc: "Egg-crate foam floor to ceiling. Livestock stop radiating Heat."},
-	{ID: "gruel", Name: "Gruel Dispenser", Level: Basement, Cost: 120, Prereq: "cell_1", Glyph: 'G', Color: "fix_cell", Kind: KindPassive, Draw: 0.02,
+	{ID: "gruel", Name: "Gruel Dispenser", Level: Basement, Cost: 120, Prereq: "cell", Glyph: 'G', Color: "fix_cell", Kind: KindPassive, Draw: 0.02,
 		Desc: "Feeds every cell automatically at half the cost. No worker needed."},
-	{ID: "buffet", Name: "All-You-Can-Eat Trough", Level: Basement, Cost: 150, Prereq: "cell_1", Glyph: 'U', Color: "fix_cell", Kind: KindPassive,
+	{ID: "buffet", Name: "All-You-Can-Eat Trough", Level: Basement, Cost: 150, Prereq: "cell", Glyph: 'U', Color: "fix_cell", Kind: KindPassive,
 		Desc: "Livestock fatten twice as fast. Marbling is a lifestyle."},
 	// --- backyard ----------------------------------------------------------
 	{ID: "back_step", Name: "Back Step", Level: Backyard, At: Pos{Backyard, 21, 4}, Cost: 0, Glyph: 'x', Color: "heat", Kind: KindContainer, Starter: true, Capacity: 99,
 		Desc: "Where the bags pile up until something deals with them. Every bag here is Heat."},
-	{ID: "plot_1", Name: "Flower Bed", Level: Backyard, At: Pos{Backyard, 2, 1}, Cost: 0, Glyph: '"', Color: "fix_yard", Kind: KindPlot, Starter: true, Capacity: 3, Duration: 30,
-		Desc: "Petunias. Room for three underneath. Half an hour with a shovel each."},
-	{ID: "plot_2", Name: "Rose Garden", Level: Backyard, Cost: 60, Prereq: "plot_1", Glyph: '"', Color: "fix_yard", Kind: KindPlot, Capacity: 4, Duration: 30,
-		Desc: "The roses have never looked better. Four more underneath."},
-	{ID: "plot_3", Name: "Koi Pond", Level: Backyard, Cost: 90, Prereq: "plot_2", Glyph: 'o', Color: "fix_cold", Kind: KindPlot, Capacity: 4, Duration: 20,
-		Desc: "The koi are enormous. Four more underneath."},
+	{ID: "plot", Name: "Flower Bed", Level: Backyard, At: Pos{Backyard, 2, 1}, Cost: 60, CostStep: 30, Glyph: '"', Color: "fix_yard", Kind: KindPlot, Starter: true, Repeat: true, Capacity: 3, Duration: 30,
+		Desc: "Petunias. Room for three underneath. Plant another bed anywhere in the yard."},
 	{ID: "compost", Name: "Compost Bin", Level: Backyard, Cost: 80, Glyph: 'C', Color: "fix_yard", Kind: KindDisposal, Duration: 1440, Accepts: []string{"bones", "clothes"},
 		Desc: "A day per item, silent. Black gold for the garden."},
 	{ID: "garden", Name: "Heirloom Tomato Garden", Level: Backyard, Cost: 120, Prereq: "compost", Glyph: 't', Color: "fix_yard", Kind: KindPassive,
@@ -351,14 +342,33 @@ var Fixtures = []Fixture{
 		Desc: "Air-cured charcuterie, a day at a time."},
 	{ID: "telescope", Name: "Telescope", Level: Attic, Cost: 90, Glyph: 'T', Color: "fix_attic", Kind: KindPassive,
 		Desc: "For astronomy. Joggers get lured; the trap fires better after dark."},
-	{ID: "cot", Name: "Renfield Cot", Level: Attic, Cost: 80, Glyph: 'n', Color: "fix_attic", Kind: KindBed,
-		Desc: "A Renfield needs somewhere to sleep. One cot, one Renfield."},
-	{ID: "cot_2", Name: "Second Cot", Level: Attic, Cost: 120, Prereq: "cot", Glyph: 'n', Color: "fix_attic", Kind: KindBed,
-		Desc: "Bunk beds, technically."},
-	{ID: "cot_3", Name: "Third Cot", Level: Attic, Cost: 180, Prereq: "cot_2", Glyph: 'n', Color: "fix_attic", Kind: KindBed,
-		Desc: "The attic is a dormitory now. Lights out at ten."},
-	{ID: "cot_4", Name: "Fourth Cot", Level: Attic, Cost: 250, Prereq: "cot_3", Glyph: 'n', Color: "fix_attic", Kind: KindBed,
-		Desc: "Four Renfields. The HOA would call it a boarding house. The HOA is in cell 3."},
+	{ID: "cot", Name: "Renfield Cot", Level: Attic, Cost: 80, CostStep: 60, Glyph: 'n', Color: "fix_attic", Kind: KindBed, Repeat: true,
+		Desc: "A Renfield needs somewhere to sleep. One cot, one Renfield. Bunk them as high as the attic allows."},
+	// --- the mall ------------------------------------------------------------
+	{ID: "booth", Name: "Mall Booth", Level: Mall, Cost: 400, Glyph: 'B', Color: "fix_lure", Kind: KindBooth, Capacity: 8, Draw: 0.3,
+		Desc: "A folding table on the concourse with a sign that says ARTISANAL. Customers buy as they pass. Rent by the hour."},
+	{ID: "kiosk", Name: "Mall Kiosk", Level: Mall, Cost: 900, Prereq: "booth", Glyph: 'K', Color: "fix_lure", Kind: KindBooth, Capacity: 16, Draw: 0.8,
+		Desc: "A proper kiosk with a glass case and a card reader. More stock, more takers. Replaces the booth."},
+	{ID: "storefront", Name: "Storefront", Level: Mall, Cost: 2500, Prereq: "kiosk", Glyph: 'S', Color: "fix_lure", Kind: KindBooth, Capacity: 30, Draw: 2.0,
+		Desc: "Your own store between the pretzel place and the Gap. Signage, a queue, a health grade in the window. Replaces the kiosk."},
+	{ID: "walk_in", Name: "Walk-In Freezer", Level: Ground, AlsoOn: []Level{Basement}, Cost: 1200, Prereq: "chest_freezer", Glyph: '*', Color: "fix_cold", Kind: KindContainer, Capacity: 40, Draw: 0.15,
+		Desc: "+40 frozen cuts. A restaurant-grade room with a handle on the inside, which you had removed."},
+	{ID: "chipper_pro", Name: "Industrial Chipper", Level: Ground, AlsoOn: []Level{Backyard}, Cost: 900, Prereq: "chipper", Glyph: '@', Color: "fix_garage", Kind: KindDisposal, Duration: 2, Noise: 1, Accepts: []string{"bones", "clothes", "phone", "car"},
+		Desc: "Two minutes per bag, takes cars, and the muffler means only the next street hears. Replaces the wood chipper."},
+	{ID: "wine_cellar", Name: "Wine Cellar", Level: Basement, Cost: 800, Prereq: "wine_rack", Glyph: 'Y', Color: "fix_living", Kind: KindPassive,
+		Desc: "Racks to the ceiling. Dinner parties run late and the neighbors leave loving you."},
+	{ID: "panic_room", Name: "Panic Room", Level: Basement, Cost: 1500, Prereq: "cameras", Glyph: 'P', Color: "fix_cell", Kind: KindPassive, Draw: 0.1,
+		Desc: "Steel door, its own air. Raiders find a locked house and nothing to take."},
+	{ID: "chefs_kitchen", Name: "Chef's Kitchen", Level: Ground, Cost: 2000, Prereq: "sous_vide", Glyph: 'C', Color: "fix_kitchen", Kind: KindPassive, Draw: 0.1,
+		Desc: "Six burners, a salamander, a pass. Every station cooks faster and every dish plates a star better."},
+	{ID: "incinerator", Name: "Backyard Incinerator", Level: Backyard, Cost: 700, Prereq: "compost", Glyph: 'I', Color: "fix_garage", Kind: KindDisposal, Duration: 20, Noise: 0.3, Accepts: []string{"bones", "clothes", "phone"},
+		Desc: "Twenty minutes a bag, a little smoke, $3 of gas each. 'Leaves,' you tell Gladys."},
+	{ID: "landscaper", Name: "Landscaping Service", Level: Backyard, Cost: 300, Glyph: 'L', Color: "fix_yard", Kind: KindPassive, Draw: 0.4,
+		Desc: "A crew twice a week. The lawn is immaculate and the street forgives faster. Costs a wage every hour."},
+	{ID: "pr_firm", Name: "PR Firm on Retainer", Level: Ground, Cost: 1000, Glyph: 'R', Color: "fix_living", Kind: KindPassive, Draw: 1.5,
+		Desc: "They handle the narrative. Heat cools much faster, for as long as you keep paying."},
+	{ID: "lawyer", Name: "Lawyer on Retainer", Level: Ground, Cost: 800, Glyph: 'J', Color: "fix_living", Kind: KindPassive, Draw: 1.0,
+		Desc: "Visitors are told to speak to counsel. Inspections overlook more. Bills by the hour, forever."},
 	{ID: "soap_molds", Name: "Soap Molds", Level: Attic, Cost: 70, Prereq: "stockpot", Glyph: 'm', Color: "fix_attic", Kind: KindPassive,
 		Desc: "Paper Street Soap Co. Scraps into money on Etsy, one bar a day."},
 }
@@ -371,7 +381,37 @@ var fixtureByID = func() map[string]*Fixture {
 	return m
 }()
 
-func FixtureByID(id string) *Fixture { return fixtureByID[id] }
+// FixtureByID resolves a fixture id or a repeatable instance ("cell#3") to
+// its template.
+func FixtureByID(id string) *Fixture {
+	if f := fixtureByID[id]; f != nil {
+		return f
+	}
+	if i := strings.IndexByte(id, '#'); i > 0 {
+		return fixtureByID[id[:i]]
+	}
+	return nil
+}
+
+// Template is the id without any instance suffix.
+func Template(id string) string {
+	if i := strings.IndexByte(id, '#'); i > 0 {
+		return id[:i]
+	}
+	return id
+}
+
+// InstanceName is "Cell 3" for "cell#3", or the plain name.
+func InstanceName(id string) string {
+	f := FixtureByID(id)
+	if f == nil {
+		return id
+	}
+	if i := strings.IndexByte(id, '#'); i > 0 {
+		return f.Name + " " + id[i+1:]
+	}
+	return f.Name
+}
 
 // Recipe runs at a Station for Duration minutes, consuming Cuts (or a bag of
 // bones), and produces one Dish. Needs are passive fixtures.

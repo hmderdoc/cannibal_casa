@@ -428,10 +428,17 @@ func (a *app) openFixture(f *sim.Fixture) {
 			onSelect: func(a *app) { a.openChairPicker() }})
 		items = append(items, item{label: "Policy: brainwashing " + onOff(a.w.Policy.Brainwash), desc: status, onSelect: func(a *app) { a.openPolicy() }})
 	}
+	if f.Kind == sim.KindPlot && a.w.Buried > 0 {
+		items = append(items, item{label: "Dig one up", color: ui.Col("heat"), desc: append([]sim.Line{{Kind: "info", Text: "A worker digs a bag back up and puts it on the back step, where a machine can destroy it for good. Old burials also return to the earth on their own after a month."}}, status...),
+			onSelect: func(a *app) {
+				a.do(sim.Command{Kind: "dig", Name: f.ID})
+				a.modal = nil
+			}})
+	}
 	items = append(items, item{label: "Move it", color: ui.Col("key"), desc: append([]sim.Line{{Kind: "info", Text: "Pick it up and put it somewhere closer to whatever it works with. Workers walk; distance is throughput."}}, status...),
 		onSelect: func(a *app) { a.startPlacing(f.ID, true) }})
 	items = append(items, item{label: "Close", desc: status, onSelect: func(a *app) { a.modal = nil }})
-	a.modal = newMenu(f.Name, items)
+	a.modal = newMenu(sim.InstanceName(f.ID), items)
 }
 
 func (a *app) openBuild(focus string) {
@@ -442,20 +449,25 @@ func (a *app) openBuild(focus string) {
 		items = append(items, item{label: strings.ToUpper(l.String()), header: true})
 		for i := range sim.Fixtures {
 			f := &sim.Fixtures[i]
-			if f.Level != l || w.Has(f.ID) || f.Cost == 0 {
+			if f.Level != l || (!f.Repeat && w.Has(f.ID)) || (f.Cost == 0 && !f.Repeat) {
 				continue
 			}
-			it := item{label: fmt.Sprintf("$%-4d %s", f.Cost, f.Name), color: ui.Col(f.Color)}
+			cost := w.NextCost(f)
+			label := fmt.Sprintf("$%-4d %s", cost, f.Name)
+			if f.Repeat {
+				label = fmt.Sprintf("$%-4d %s (you have %d)", cost, f.Name, w.Instances(f.ID))
+			}
+			it := item{label: label, color: ui.Col(f.Color)}
 			desc := explain(w, f)
 			switch {
 			case f.Prereq != "" && !w.Has(f.Prereq):
 				it.disabled = true
 				desc = append(desc, sim.Line{Kind: "warn", Text: "Needs the " + sim.FixtureByID(f.Prereq).Name + " first."})
-			case w.Cash < float64(f.Cost):
+			case w.Cash < float64(cost):
 				it.disabled = true
-				desc = append(desc, sim.Line{Kind: "warn", Text: fmt.Sprintf("Costs $%d; you have $%.0f.", f.Cost, w.Cash)})
+				desc = append(desc, sim.Line{Kind: "warn", Text: fmt.Sprintf("Costs $%d; you have $%.0f.", cost, w.Cash)})
 			default:
-				desc = append(desc, sim.Line{Kind: "cash", Text: fmt.Sprintf("Costs $%d of your $%.0f.", f.Cost, w.Cash)})
+				desc = append(desc, sim.Line{Kind: "cash", Text: fmt.Sprintf("Costs $%d of your $%.0f.", cost, w.Cash)})
 			}
 			it.desc = desc
 			it.onSelect = func(a *app) {
@@ -495,6 +507,10 @@ func (a *app) openGoOut() {
 	if p.Away != nil {
 		left := p.Away.Until - w.Clock
 		a.modal = textPanel("You're out", []sim.Line{{Kind: "warn", Text: fmt.Sprintf("%s: back in %dh%02dm. The house runs itself meanwhile.", capitalize(p.Away.Label), left/60, left%60)}})
+		return
+	}
+	if p.Out() {
+		a.modal = textPanel("You're out", []sim.Line{{Kind: "warn", Text: capitalize(p.Job.Label) + ". Tab over to the mall to watch. The house runs itself meanwhile."}})
 		return
 	}
 	var items []item
@@ -594,6 +610,19 @@ func (a *app) openPolicy() {
 		{label: fmt.Sprintf("Butcher at marbling %d", p.ButcherMarbling), color: ui.Col("food"),
 			desc:     []sim.Line{{Kind: "info", Text: "Livestock is processed once it fattens to this marbling (1 = as soon as it lands, 5 = wait for prime). Fed livestock gains a point every three days."}},
 			onSelect: func(a *app) { p.ButcherMarbling = p.ButcherMarbling%5 + 1; set(a, p) }},
+		{label: "Intake: " + intakeName(p.Intake), color: ui.Col("heat"),
+			desc: []sim.Line{{Kind: "info", Text: "Always: the mat fires whenever a cell is free. When the fridge runs low: lures and the mat stay quiet until the fridge is under half full. Never: lay low; nobody gets taken until you say so. The lever for Heat."}},
+			onSelect: func(a *app) {
+				switch p.Intake {
+				case "always":
+					p.Intake = "hungry"
+				case "hungry":
+					p.Intake = "never"
+				default:
+					p.Intake = "always"
+				}
+				set(a, p)
+			}},
 		{label: "Butcher when every cell is full: " + onOff(p.ButcherWhenFull), color: ui.Col("food"),
 			desc:     []sim.Line{{Kind: "info", Text: "With no free cell the trap can't fire. ON processes the fattest guest to make room."}},
 			onSelect: func(a *app) { p.ButcherWhenFull = !p.ButcherWhenFull; set(a, p) }},
@@ -617,6 +646,16 @@ func (a *app) openPolicy() {
 			onSelect: func(a *app) { p.Freeze = !p.Freeze; set(a, p) }},
 	}
 	a.modal = newMenu("Policy ─ how the house runs itself", items)
+}
+
+func intakeName(v string) string {
+	switch v {
+	case "hungry":
+		return "only when the fridge runs low"
+	case "never":
+		return "NEVER (laying low)"
+	}
+	return "always"
 }
 
 func (a *app) openSellList() {

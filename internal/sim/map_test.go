@@ -33,8 +33,12 @@ func TestPlansConsistent(t *testing.T) {
 			t.Errorf("fixture %s prereq %s missing", f.ID, f.Prereq)
 		}
 		if f.Starter {
-			if err := w.CanPlace(&f, f.At); err != nil {
-				t.Errorf("starter %s default tile %v: %v", f.ID, f.At, err)
+			id := f.ID
+			if f.Repeat {
+				id += "#1"
+			}
+			if !w.Fixtures[id] || w.Pos(id) != f.At {
+				t.Errorf("starter %s not placed at its default tile %v", id, f.At)
 			}
 		}
 	}
@@ -65,7 +69,7 @@ func TestEverythingReachable(t *testing.T) {
 	for id := range w.Placed {
 		tiles = append(tiles, w.Pos(id))
 	}
-	tiles = append(tiles, Pos{Ground, 0, SidewalkY}, GateTile, FrontDoor, Pos{Attic, 1, 1}, Pos{Backyard, 44, 3})
+	tiles = append(tiles, Pos{Ground, 0, SidewalkY}, GateTile, FrontDoor, Pos{Attic, 1, 1}, Pos{Backyard, 44, 3}, FoodCourt, MallEntrance)
 	for _, a := range tiles {
 		for _, b := range tiles {
 			if a != b && Path(a, b) == nil {

@@ -46,6 +46,17 @@ var guide = []section{
 		{Kind: "fix_closet", Text: "Roles (Roster, L): Hand does everything; Cook keeps the kitchen moving; Guard patrols the cells (escapes drop to a third, raiders get caught); Shill works the porch (lures pull harder); Gimp lives in the basement (the livestock goes quiet and stops trying the door)."},
 		{Kind: "fix_closet", Text: "A Renfield who eats six dishes from your shelf knows what they are and asks for seconds. A fellow cannibal: loyal for life, eats half again as much, and goes hunting at night on their own."},
 	}},
+	{"The mall", []sim.Line{
+		{Kind: "cash", Text: "Tab past the attic and you're at the mall: stores off a concourse, customers all day. Buy a booth on the concourse and they buy what's stocked at mall prices. A kiosk holds more and sells better; a storefront sells to a queue."},
+		{Kind: "cash", Text: "Give a Renfield the Clerk role and they carry stock over from the shelf and mind the counter. A shift at the food court (Go out) now walks you there for real; watch yourself work."},
+		{Kind: "heat", Text: "Every sale, at home or at the mall, makes you a little more respectable: Heat cools with commerce."},
+	}},
+	{"Heat: the levers", []sim.Line{
+		{Kind: "heat", Text: "Policy: Intake. Set it to 'only when the fridge runs low' and the mat stays quiet while you're stocked; set it to 'never' to lay low completely."},
+		{Kind: "heat", Text: "Go out: volunteer at the bake sale (two dishes), drop a check at the HOA ($200), or throw a block party ($150, three dishes, once a week). Money and food become goodwill."},
+		{Kind: "heat", Text: "Upkeep: a landscaping service and a PR firm on retainer cool the street every hour for as long as you pay them; a lawyer on retainer makes inspections overlook more."},
+		{Kind: "heat", Text: "Plots: Enter on a flower bed to dig a bag back up and destroy it properly. Burials older than a month become flowers on their own."},
+	}},
 	{"Going out and raids", []sim.Line{
 		{Kind: "warn", Text: "G sends you out. The house keeps running on your policy; Renfields keep working; livestock still eats. You come home through the front door."},
 		{Kind: "warn", Text: "Raiding another house on the street is settled by their defenses (cameras, fence, doorbell camera, guards, anyone awake) against your gear (van, chemistry set). Win: 15% of their cash and a few things from the kitchen. Lose: Heat +10. Once per house per real day. They hear about it either way."},

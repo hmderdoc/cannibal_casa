@@ -8,6 +8,7 @@ const (
 	Basement
 	Backyard
 	Attic
+	Mall
 	NumLevels
 )
 
@@ -19,8 +20,10 @@ func (l Level) String() string {
 		return "Basement"
 	case Backyard:
 		return "Backyard"
+	case Attic:
+		return "Attic"
 	}
-	return "Attic"
+	return "The Mall"
 }
 
 // Pos is a tile on a level.
@@ -86,6 +89,21 @@ var Plans = [NumLevels]Plan{
 		"#.....................<......................#",
 		"##############################################",
 	}, Rooms: []Room{{"ATTIC", 1, 1}}},
+	// The mall: stores off a concourse, customers walking it all day. A booth
+	// goes on the concourse; the food court is where the mall job is.
+	Mall: {Level: Mall, Rows: []string{
+		"##############################################",
+		"#.................#...............#..........#",
+		"#.................#...............#..........#",
+		"#.................+...............+..........#",
+		"#............................................#",
+		"#.................+...............+..........#",
+		"#.................#...............#..........#",
+		"##############+###############################",
+	}, Rooms: []Room{
+		{"FOOD COURT", 2, 1}, {"PRETZEL TIME", 20, 1}, {"THE GAP", 36, 1},
+		{"SHOE PALACE", 2, 6}, {"MOVIE 12", 20, 6}, {"ARCADE", 36, 6},
+	}},
 }
 
 // Links join tiles across levels: stairs and the back door. Both directions.
@@ -96,6 +114,8 @@ var Links = map[Pos]Pos{
 	{Attic, 22, 3}:    {Ground, 39, 12},
 	{Ground, 45, 8}:   {Backyard, 0, 2},
 	{Backyard, 0, 2}:  {Ground, 45, 8},
+	{Ground, 0, 1}:    {Mall, 14, 7}, // the end of the sidewalk is a short walk to the mall
+	{Mall, 14, 7}:     {Ground, 0, 1},
 }
 
 // Named tiles and areas the sim routes to.
@@ -108,6 +128,11 @@ var (
 	SidewalkEnds = [2]int{0, 45}
 	// PorchRect is the front of the house: lures, the trap and the stand go here.
 	PorchRect = struct{ X0, Y0, X1, Y1 int }{1, 3, 16, 4}
+	// The mall's tiles the sim routes to.
+	MallEntrance = Pos{Mall, 14, 7}
+	FoodCourt    = Pos{Mall, 9, 2}
+	ConcourseY   = 4
+	MallEnds     = [2]int{1, 44}
 )
 
 func (p Plan) At(x, y int) byte {

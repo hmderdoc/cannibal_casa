@@ -32,9 +32,19 @@ workers. Then you watch it run, in color, on a roguelike map.
 Money comes from the wallets of the people who drop through the mat, from
 the curb stand, and from going out: a shift at the mall, a market run,
 hunting, scavenging, or raiding another house on the street, CPU or player.
-Renfields take roles (hand, cook, guard, shill, gimp), and one that eats
-enough of what the house serves becomes a fellow cannibal who hunts on their
-own.
+Renfields take roles (hand, cook, guard, shill, gimp, clerk), and one that
+eats enough of what the house serves becomes a fellow cannibal who hunts on
+their own.
+
+Cells, flower beds and cots can be built as many times as the floor allows,
+each costing more than the last, and late-game money goes into a walk-in
+freezer, an industrial chipper, a chef's kitchen, or upkeep like a landscaper,
+a lawyer and a PR firm that cool the street for as long as you pay them. The
+mall is a real place: Tab past the attic, buy a booth on the concourse, give
+a Renfield the clerk role, and grow it into a kiosk and then a storefront.
+Heat has levers: an intake policy (always, only when the fridge runs low,
+never), a block party, a check to the HOA, a bake sale, and every sale you
+make. Plots can be dug up, and old burials become flowers on their own.
 
 Death is inheritance: a raid or starvation ends this cannibal, and a relative
 takes the house with its fixtures, half the cash, and empty cells.

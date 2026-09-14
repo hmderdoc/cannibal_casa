@@ -64,8 +64,8 @@ func TestLocalNeighborhood(t *testing.T) {
 
 	// Commands persist and post.
 	a.Cash = 1000
-	w, err := l.Do("bbs1", "Alice", sim.Command{Kind: "build", Name: "cell_2", At: &sim.Pos{L: sim.Basement, X: 8, Y: 1}})
-	if err != nil || !w.Has("cell_2") {
+	w, err := l.Do("bbs1", "Alice", sim.Command{Kind: "build", Name: "cell", At: &sim.Pos{L: sim.Basement, X: 8, Y: 1}})
+	if err != nil || w.Instances("cell") != 2 {
 		t.Fatalf("do: %v", err)
 	}
 	hood, _ = l.Neighborhood("bbs1", "Alice")
@@ -89,7 +89,7 @@ func TestLocalNeighborhood(t *testing.T) {
 	l2 := NewLocal(dir, 60)
 	l2.Now = func() time.Time { return now }
 	a2, _, ticks, _ := l2.Join("bbs1", "Alice")
-	if a2.Clock != a.Clock || ticks != 0 || !a2.Has("cell_2") {
+	if a2.Clock != a.Clock || ticks != 0 || a2.Instances("cell") != 2 {
 		t.Fatalf("reload: clock %d vs %d, ticks %d", a2.Clock, a.Clock, ticks)
 	}
 }

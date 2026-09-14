@@ -73,6 +73,21 @@ and tune a factory and watch it run on a roguelike-style map, in color.
   quiet). A Renfield who eats six dishes converts: a fellow cannibal, loyal
   for life, eating like family, hunting at night on their own.
 
+## Late game
+
+- **Repeatables.** Cells, flower beds and cots are templates instanced as
+  `cell#3`; each copy costs `CostStep` more. Space is the only cap.
+- **Sinks.** Big one-off upgrades (walk-in, industrial chipper, wine cellar,
+  panic room, chef's kitchen) and hourly-drawn services (landscaper, lawyer,
+  PR firm) so cash keeps meaning something after the catalog is bought. A
+  finished catalog is announced once.
+- **Heat levers.** Policy intake (always / hungry / never); errands that turn
+  cash and dishes into goodwill (volunteer, donate, block party); every sale
+  cools a little; dig up plots; burials older than a month decompose.
+- **The mall.** A fifth level with customers on a concourse. A booth, kiosk
+  or storefront sells stock a clerk carries over; rent is hourly. The mall
+  shift errand walks the cannibal there on-screen.
+
 ## The door
 
 Cursor over the map; Enter looks at whatever is there (a worker's job, a

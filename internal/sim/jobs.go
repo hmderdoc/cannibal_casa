@@ -3,6 +3,7 @@ package sim
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // Job selection: a worker with nothing to do asks, in priority order, whether
@@ -37,7 +38,7 @@ func (w *World) pickJob(wk *Worker) *Job {
 			return j
 		}
 	}
-	order := []func(*Worker) *Job{w.jobFeed, w.jobCollect, w.jobDispose, w.jobButcher, w.jobCookAny, w.jobStock, w.jobBrainwash}
+	order := []func(*Worker) *Job{w.jobFeed, w.jobCollect, w.jobDispose, w.jobDig, w.jobButcher, w.jobCookAny, w.jobStock, w.jobBrainwash}
 	switch wk.Role {
 	case RoleCook:
 		order = []func(*Worker) *Job{w.jobCollect, w.jobCookAny, w.jobFeed, w.jobStock, w.jobButcher, w.jobDispose, w.jobBrainwash}
@@ -45,6 +46,10 @@ func (w *World) pickJob(wk *Worker) *Job {
 		order = []func(*Worker) *Job{w.jobFeed, w.jobButcher} // stays near the cells; the rest is not their job
 	case RoleShill:
 		order = []func(*Worker) *Job{w.jobStock} // lives on the porch, minds the stand
+	case RoleClerk:
+		order = []func(*Worker) *Job{w.jobStockBooth} // lives at the mall
+	default:
+		order = append(order, w.jobStockBooth)
 	}
 	for _, f := range order {
 		if j := f(wk); j != nil {
@@ -76,9 +81,9 @@ func (w *World) jobSleep(wk *Worker) *Job {
 	bed := "bed"
 	if wk.Kind != "cannibal" {
 		bed = ""
-		for _, f := range []string{"cot", "cot_2", "cot_3", "cot_4"} {
-			if w.Has(f) && !w.bedTaken(f, wk) {
-				bed = f
+		for _, f := range w.ownedOfKind(KindBed) {
+			if f.ID != "bed" && !w.bedTaken(f.ID, wk) {
+				bed = f.ID
 				break
 			}
 		}
@@ -157,7 +162,7 @@ func (w *World) jobDispose(wk *Worker) *Job {
 			return &Job{Kind: "dispose", Label: "bagging " + e.Sub + " for the " + f.Name, Target: e.ID, Machine: f.ID,
 				Steps: []Step{w.stepTo("back_step", 0, "take_evidence"), w.stepTo(f.ID, 3, "load_disposal")}}
 		}
-		if w.Buried < w.PlotCap() {
+		if w.Buried < w.PlotCap() && !e.Dug {
 			for _, f := range w.ownedOfKind(KindPlot) {
 				if w.reserved(f.ID) {
 					continue
@@ -182,6 +187,24 @@ func (w *World) jobDispose(wk *Worker) *Job {
 		}
 		return &Job{Kind: "haul", Label: label, Target: c.ID,
 			Steps: []Step{{Dest: Pos{Ground, DrivewayX, SidewalkY}, Work: work, Do: "haul_car"}}}
+	}
+	return nil
+}
+
+// jobDig digs a bag back up from a plot the player ordered cleared.
+func (w *World) jobDig(wk *Worker) *Job {
+	for plot, n := range w.DigOrders {
+		if n <= 0 || !w.Fixtures[plot] || w.Buried == 0 || w.reserved(plot) {
+			continue
+		}
+		f := FixtureByID(plot)
+		work := f.Duration
+		if w.Has("shed") {
+			work /= 2
+		}
+		w.machine(plot).ReservedBy = wk.ID
+		return &Job{Kind: "dig", Label: "digging up the " + strings.ToLower(f.Name), Machine: plot,
+			Steps: []Step{{Dest: w.Pos(plot), Work: work, Do: "dig_up"}, w.stepTo("back_step", 0, "drop_bag")}}
 	}
 	return nil
 }
@@ -380,6 +403,31 @@ func (w *World) jobStock(wk *Worker) *Job {
 	return nil
 }
 
+// jobStockBooth carries sale dishes from the shelf to the mall booth. Clerks
+// do it first; anyone does it when there's no clerk and the booth is empty.
+func (w *World) jobStockBooth(wk *Worker) *Job {
+	booth := w.boothID()
+	if booth == "" || len(w.Booth) >= w.BoothCap() {
+		return nil
+	}
+	if wk.Role != RoleClerk && (w.RoleCount(RoleClerk) > 0 || len(w.Booth) > 0) {
+		return nil
+	}
+	spare := w.foodOnShelf() - w.Policy.PantryTarget
+	for _, d := range w.Pantry {
+		rc := RecipeByID(d.Sub)
+		if rc.Price == 0 || !w.Policy.Sell[rc.ID] {
+			continue
+		}
+		if rc.Food && spare <= 0 {
+			continue
+		}
+		return &Job{Kind: "stock", Label: "taking stock to the mall", Target: d.ID,
+			Steps: []Step{w.stepTo("pantry", 0, "take_sell_batch"), w.stepTo(booth, 2, "drop_booth")}}
+	}
+	return nil
+}
+
 func (w *World) jobBrainwash(wk *Worker) *Job {
 	if !w.Has("chair") || (!w.Policy.Brainwash && !w.hasOrder("chair")) {
 		return nil
@@ -448,6 +496,12 @@ func (w *World) jobIdle(wk *Worker) *Job {
 		at := w.TrapPos()
 		return &Job{Kind: "idle", Label: "working the porch", Steps: []Step{{Dest: Pos{at.L, at.X - 1, at.Y}, Work: 30 + r.Intn(30), Do: "noop"}}}
 	}
+	if wk.Role == RoleClerk {
+		if booth := w.boothID(); booth != "" {
+			at := w.Pos(booth)
+			return &Job{Kind: "idle", Label: "minding the booth", Steps: []Step{{Dest: Pos{at.L, at.X, at.Y - 1}, Work: 60 + r.Intn(60), Do: "noop"}}}
+		}
+	}
 	why := "idle: " + w.idleReason()
 	for i := 0; i < 20; i++ {
 		x, y := wk.Pos.X+r.Intn(13)-6, wk.Pos.Y+r.Intn(7)-3
@@ -471,6 +525,8 @@ func (w *World) idleReason() string {
 		return "shelf full"
 	case w.foodOnShelf() >= w.Policy.PantryTarget && fresh > 0 && w.standID() != "" && len(w.Stand) >= w.StandCap():
 		return "stand full, shelf stocked"
+	case w.boothID() != "" && len(w.Booth) == 0 && w.RoleCount(RoleClerk) == 0:
+		return "the mall booth is empty; assign a clerk"
 	case w.foodOnShelf() >= w.Policy.PantryTarget && fresh > 0:
 		return "shelf stocked; nothing marked for sale needs cooking"
 	case fresh == 0 && len(w.Livestock) == 0:
@@ -607,6 +663,15 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		}
 		e := wk.Carry[ei]
 		wk.Carry = append(wk.Carry[:ei], wk.Carry[ei+1:]...)
+		if f.ID == "incinerator" {
+			if w.Cash < 3 {
+				w.Pile = append(w.Pile, e)
+				w.say("warn", "The incinerator needs $3 of gas per bag. Nothing in the jar.")
+				return false
+			}
+			w.Cash -= 3
+			w.SpentUtil += 3
+		}
 		m.Busy = f.Duration
 		m.Item = e.Sub
 		m.Uses++
@@ -631,9 +696,31 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		}
 		wk.Carry = append(wk.Carry[:ei], wk.Carry[ei+1:]...)
 		w.Buried++
+		w.BuriedAt = append(w.BuriedAt, w.Clock)
 		w.Stats.Buried++
 		if !w.Has("shed") && w.IsNight() {
 			w.Heat = clampF(w.Heat+0.5, 0, 120)
+		}
+		return true
+	case "dig_up":
+		w.machine(j.Machine).ReservedBy = 0
+		if w.Buried == 0 {
+			return false
+		}
+		w.Buried--
+		if len(w.BuriedAt) > 0 {
+			w.BuriedAt = w.BuriedAt[1:]
+		}
+		if w.DigOrders[j.Machine] > 0 {
+			w.DigOrders[j.Machine]--
+		}
+		wk.Carry = append(wk.Carry, Item{ID: w.newID(), Kind: "evidence", Sub: "bones", Born: w.Clock - 3*day, Dug: true})
+		w.say("info", "%s dug a bag back up. It's on the step now; deal with it properly.", wk.Name)
+		return true
+	case "finish_errand":
+		if j.Errand != nil {
+			w.applyErrand(wk, j.Errand)
+			j.Errand = nil
 		}
 		return true
 	case "haul_car":
@@ -804,6 +891,36 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 			}
 		}
 		return false
+	case "take_sell_batch":
+		spare := w.foodOnShelf() - w.Policy.PantryTarget
+		var keep []Item
+		taken := 0
+		for _, d := range w.Pantry {
+			rc := RecipeByID(d.Sub)
+			if taken < 4 && rc.Price > 0 && w.Policy.Sell[rc.ID] && (!rc.Food || spare > 0) {
+				wk.Carry = append(wk.Carry, d)
+				taken++
+				if rc.Food {
+					spare--
+				}
+				continue
+			}
+			keep = append(keep, d)
+		}
+		w.Pantry = keep
+		return taken > 0
+	case "drop_booth":
+		var keep []Item
+		for _, d := range wk.Carry {
+			if d.Kind == "dish" && len(w.Booth) < w.BoothCap() {
+				w.Booth = append(w.Booth, d)
+			} else {
+				keep = append(keep, d)
+			}
+		}
+		wk.Carry = keep
+		w.dropBack(wk)
+		return true
 	case "drop_stand":
 		var keep []Item
 		for _, d := range wk.Carry {

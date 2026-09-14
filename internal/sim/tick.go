@@ -49,6 +49,7 @@ func (w *World) Sync(now time.Time, speed int) int {
 func (w *World) tick() {
 	w.Clock++
 	w.tickPassers()
+	w.tickShoppers()
 	w.tickLivestock()
 	w.tickMachines()
 	w.tickWorkers()
@@ -130,6 +131,74 @@ func (w *World) rollVictim(r *rand.Rand) *Victim {
 	return pool[0]
 }
 
+// tickShoppers walks customers along the mall concourse. Each one passing an
+// owned booth with stock may buy once; a sale cools the street a little.
+func (w *World) tickShoppers() {
+	r := w.rng()
+	h := w.Hour()
+	open := h >= 10 && h < 21
+	if open && w.Clock >= w.NextShopper {
+		v := w.rollVictim(r)
+		dir, x := 1, MallEnds[0]
+		if r.Intn(2) == 0 {
+			dir, x = -1, MallEnds[1]
+		}
+		w.Passers = append(w.Passers, &Passerby{ID: w.newID(), Victim: v.ID, Pos: Pos{Mall, x, ConcourseY}, Dir: dir, State: "shop"})
+		w.NextShopper = w.Clock + int64(4+r.Intn(6))
+	}
+	booth := w.boothID()
+	var bpos Pos
+	rate := 0
+	if booth != "" {
+		bpos = w.Pos(booth)
+		switch Template(booth) {
+		case "booth":
+			rate = 35
+		case "kiosk":
+			rate = 50
+		default:
+			rate = 70
+		}
+	}
+	var keep []*Passerby
+	for _, p := range w.Passers {
+		if p.State != "shop" {
+			keep = append(keep, p)
+			continue
+		}
+		if booth != "" && !p.Bought && len(w.Booth) > 0 && p.Pos.L == Mall && abs(p.Pos.X-bpos.X) <= 1 && abs(p.Pos.Y-bpos.Y) <= 1 {
+			p.Bought = true
+			if r.Intn(100) < rate {
+				d := w.Booth[0]
+				w.Booth = w.Booth[1:]
+				price := (RecipeByID(d.Sub).Price + 5*(d.Quality-3)) * 6 / 5
+				w.Cash += float64(price)
+				w.Stats.Sold++
+				w.Heat = clampF(w.Heat-0.3, 0, 120)
+				if Template(booth) == "storefront" && len(w.Booth) > 0 && r.Intn(2) == 0 {
+					d2 := w.Booth[0]
+					w.Booth = w.Booth[1:]
+					w.Cash += float64((RecipeByID(d2.Sub).Price + 5*(d2.Quality-3)) * 6 / 5)
+					w.Stats.Sold++
+				}
+			}
+		}
+		p.Pos.X += p.Dir
+		if p.Pos.X < MallEnds[0] || p.Pos.X > MallEnds[1] {
+			continue
+		}
+		keep = append(keep, p)
+	}
+	w.Passers = keep
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 func (w *World) tickPassers() {
 	r := w.rng()
 	if w.Clock >= w.NextPasserby {
@@ -146,6 +215,9 @@ func (w *World) tickPassers() {
 	var keep []*Passerby
 	for _, p := range w.Passers {
 		switch p.State {
+		case "shop":
+			keep = append(keep, p) // handled by tickShoppers
+			continue
 		case "walk":
 			if p.Pos.X == GateTile.X && w.tryLure(p, r) {
 				p.State = "lured"
@@ -184,6 +256,14 @@ func (w *World) tickPassers() {
 func (w *World) tryLure(p *Passerby, r *rand.Rand) bool {
 	if w.freeCell() == "" || w.trapBusy() || w.Clock < w.TrapReady {
 		return false
+	}
+	switch w.Policy.Intake {
+	case "never":
+		return false
+	case "hungry":
+		if fresh, _ := w.fridgeUsed(); fresh*2 >= w.FridgeCap() {
+			return false
+		}
 	}
 	v := VictimByID(p.Victim)
 	chance := 15 // per mille
@@ -581,6 +661,9 @@ func (w *World) resolveInspection(v *Visitor) {
 	w.Stats.Inspections++
 	visible := w.VisibleEvidence()
 	limit := InspectionThreshold(v.Tier)
+	if w.Has("lawyer") {
+		limit += 2
+	}
 	if visible <= limit {
 		drop := 8.0
 		for i, d := range w.Pantry {
@@ -659,6 +742,12 @@ func (w *World) hourly() {
 	if w.Has("curtains") {
 		cool += 0.2
 	}
+	if w.Has("landscaper") {
+		cool += 0.25
+	}
+	if w.Has("pr_firm") {
+		cool += 0.5
+	}
 	if w.VisibleEvidence() <= 0 {
 		cool += 0.5
 	}
@@ -723,6 +812,7 @@ func (w *World) hourly() {
 		price := rc.Price + 5*(d.Quality-3)
 		w.Cash += float64(price)
 		w.Stats.Sold++
+		w.Heat = clampF(w.Heat-0.2, 0, 120) // a pillar of the community
 		if w.Stats.Sold%10 == 0 {
 			w.post("cash", "sold out at the curb stand again. The pies. People line up for the pies.")
 		}
@@ -891,6 +981,24 @@ func (w *World) daily() {
 				break
 			}
 		}
+	}
+	// Old burials return to the earth.
+	var still []int64
+	gone := 0
+	for _, at := range w.BuriedAt {
+		if w.Clock-at > 30*day {
+			gone++
+			continue
+		}
+		still = append(still, at)
+	}
+	w.BuriedAt = still
+	if gone > 0 {
+		w.Buried -= gone
+		if w.Buried < 0 {
+			w.Buried = 0
+		}
+		w.say("good", "%d old burial%s under the flowers finally became flowers. The bed is free again.", gone, plural(gone))
 	}
 	w.say("info", "Day %d. %s", w.Day(), morningLines[w.rng().Intn(len(morningLines))])
 	if w.SpentFeed > 0 || w.SpentUtil >= 0.5 {

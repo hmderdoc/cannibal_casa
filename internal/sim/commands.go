@@ -11,7 +11,7 @@ import (
 // the rest.
 
 // replaces maps an upgrade to the fixture it supersedes in place.
-var replaces = map[string]string{"trapdoor_pro": "welcome_mat", "stand_big": "stand"}
+var replaces = map[string]string{"trapdoor_pro": "welcome_mat", "stand_big": "stand", "chipper_pro": "chipper", "kiosk": "booth", "storefront": "kiosk"}
 
 // Build buys a fixture and places it. An upgrade that supersedes something
 // (the trapdoor, the farm stand) takes its predecessor's tile.
@@ -20,14 +20,15 @@ func (w *World) Build(id string, at Pos) error {
 	if f == nil {
 		return errors.New("no such upgrade")
 	}
-	if w.Has(id) {
+	if !f.Repeat && w.Has(id) {
 		return fmt.Errorf("you already have the %s", f.Name)
 	}
 	if f.Prereq != "" && !w.Has(f.Prereq) {
 		return fmt.Errorf("needs the %s first", FixtureByID(f.Prereq).Name)
 	}
-	if w.Cash < float64(f.Cost) {
-		return fmt.Errorf("the %s costs $%d; you have $%.0f", f.Name, f.Cost, w.Cash)
+	cost := w.NextCost(f)
+	if w.Cash < float64(cost) {
+		return fmt.Errorf("the %s costs $%d; you have $%.0f", f.Name, cost, w.Cash)
 	}
 	if old := replaces[id]; old != "" && w.Has(old) {
 		at = w.Pos(old)
@@ -36,24 +37,64 @@ func (w *World) Build(id string, at Pos) error {
 	} else if err := w.CanPlace(f, at); err != nil {
 		return err
 	}
-	w.Cash -= float64(f.Cost)
-	w.Fixtures[id] = true
-	w.Placed[id] = at
-	w.say("good", "Installed: %s. %s", f.Name, f.Desc)
+	inst := id
+	if f.Repeat {
+		n := 1
+		for w.Fixtures[fmt.Sprintf("%s#%d", id, n)] {
+			n++
+		}
+		inst = fmt.Sprintf("%s#%d", id, n)
+	}
+	w.Cash -= float64(cost)
+	w.Fixtures[inst] = true
+	w.Placed[inst] = at
+	w.say("good", "Installed: %s. %s", InstanceName(inst), f.Desc)
 	if f.Kind == KindCell {
-		w.post("info", "put in a new %s. \"Wine cellar,\" they said.", strings.ToLower(f.Name))
+		w.post("info", "dug out another cell. \"Wine cellar,\" they said.")
+	}
+	if w.HouseComplete() && !w.Complete {
+		w.Complete = true
+		w.say("good", "That was the last thing in the catalog. The house is complete. What's left is the street, the mall, and how long you last.")
+		w.post("good", "finished the house. The neighbors are impressed, and slightly fewer.")
 	}
 	return nil
+}
+
+// HouseComplete reports whether every one-off fixture is owned.
+func (w *World) HouseComplete() bool {
+	for _, f := range Fixtures {
+		if f.Repeat || f.Cost == 0 {
+			continue
+		}
+		if replaced := replaces[f.ID]; replaced != "" {
+			continue // an upgrade path; owning either end counts below
+		}
+		if !w.Has(f.ID) && !w.upgradedPast(f.ID) {
+			return false
+		}
+	}
+	return true
+}
+
+func (w *World) upgradedPast(id string) bool {
+	for up, old := range replaces {
+		if old == id && w.Has(up) {
+			return true
+		}
+	}
+	return false
 }
 
 // Move relocates an owned fixture. Workers re-path on their next step, so a
 // fridge dragged next to the block shortens every trip after this one.
 func (w *World) Move(id string, at Pos) error {
 	f := FixtureByID(id)
-	if f == nil || !w.Has(id) {
+	if f == nil || !w.Fixtures[id] {
 		return errors.New("you don't have that")
 	}
-	if err := w.CanPlace(f, at); err != nil {
+	inst := *f
+	inst.ID = id
+	if err := w.CanPlace(&inst, at); err != nil {
 		return err
 	}
 	w.Placed[id] = at
@@ -67,7 +108,7 @@ func (w *World) Move(id string, at Pos) error {
 			}
 		}
 	}
-	w.say("info", "Moved the %s.", f.Name)
+	w.say("info", "Moved the %s.", InstanceName(id))
 	return nil
 }
 
@@ -88,6 +129,9 @@ var Errands = []ErrandDef{
 	{"hunt", "Go hunting", 4, "Stop waiting for the mat. Odds depend on your gear and who's out; best after dark. A cell must be free when you get back."},
 	{"scrap", "Scavenge the neighborhood", 2, "Bins, curbs, an unlocked garage. Usually a little cash. Sometimes a cooler nobody will miss."},
 	{"raid", "Raid a house", 5, "Break into another house on the street while its owner's away. Cash, meat, dishes. Cameras and fences fight back."},
+	{"volunteer", "Volunteer at the church bake sale", 4, "Bring two dishes from the shelf and a smile. The street cools off a good deal. Costs the dishes."},
+	{"donate", "Drop a check at the HOA office", 1, "Sponsor the newsletter. $200 buys a lot of goodwill, and a plaque."},
+	{"party", "Throw a block party", 3, "$150, three dishes, the whole street on your lawn. Heat drops hard, stars go up. Once a week."},
 }
 
 func ErrandByID(id string) *ErrandDef {
@@ -109,6 +153,9 @@ func (w *World) StartErrand(kind string) error {
 	if p.Away != nil {
 		return fmt.Errorf("you're already out: %s", p.Away.Label)
 	}
+	if p.Job != nil && p.Job.Kind == "errand" {
+		return fmt.Errorf("you're already out: %s", p.Job.Label)
+	}
 	def := ErrandByID(kind)
 	if def == nil {
 		return errors.New("no such errand")
@@ -120,6 +167,7 @@ func (w *World) StartErrand(kind string) error {
 		e.Cash = 40 + r.Intn(21)
 		e.Text = fmt.Sprintf("Back from the mall with $%d. Someone asked about your background. You said 'meat'.", e.Cash)
 		e.TextKind = "cash"
+		return w.departTo(p, e, FoodCourt, def.Hours*60)
 	case "market":
 		total := 0
 		n := 0
@@ -182,6 +230,60 @@ func (w *World) StartErrand(kind string) error {
 			e.Text = fmt.Sprintf("Cans, a lawnmower, a jar of quarters: $%d.", e.Cash)
 			e.TextKind = "cash"
 		}
+	case "volunteer":
+		taken := 0
+		var keep []Item
+		for _, d := range w.Pantry {
+			if taken < 2 && RecipeByID(d.Sub).Food {
+				taken++
+				continue
+			}
+			keep = append(keep, d)
+		}
+		if taken < 2 {
+			return errors.New("bring two dishes; there aren't two on the shelf")
+		}
+		w.Pantry = keep
+		e.Heat = -12
+		e.Text = "The bake sale loved your fritters. Someone called you a saint. Heat -12."
+		e.TextKind = "good"
+		e.Post = "ran the church bake sale table. 'A saint,' said the pastor, reaching for seconds."
+	case "donate":
+		if w.Cash < 200 {
+			return errors.New("the check needs $200 behind it")
+		}
+		w.Cash -= 200
+		e.Heat = -10
+		e.Text = "The HOA took the check and gave you a plaque. Heat -10."
+		e.TextKind = "good"
+	case "party":
+		if w.Clock-w.LastParty < 7*day && w.LastParty > 0 {
+			return errors.New("the street is still hungover from the last one; one a week")
+		}
+		if w.Cash < 150 {
+			return errors.New("a block party needs $150")
+		}
+		taken := 0
+		var keep []Item
+		for _, d := range w.Pantry {
+			if taken < 3 && RecipeByID(d.Sub).Food {
+				taken++
+				continue
+			}
+			keep = append(keep, d)
+		}
+		if taken < 3 {
+			return errors.New("a block party needs three dishes on the shelf")
+		}
+		w.Pantry = keep
+		w.Cash -= 150
+		w.LastParty = w.Clock
+		e.Heat = -25
+		e.Cash = 0
+		e.Text = "Block party. Bouncy castle, your ribs, Gladys dancing. Heat -25, +5 stars."
+		e.TextKind = "good"
+		e.Post = "threw a block party. The ribs were the talk of the street. Nobody asked where the bones went."
+		w.Stars += 5
 	case "raid":
 		houses := []string{"the Hendersons", "the Nguyens", "the Carlucci twins", "that Airbnb on the corner", "the model home"}
 		h := houses[r.Intn(len(houses))]
@@ -210,6 +312,9 @@ func (w *World) StartRaid(e *Errand) error {
 	if p.Away != nil {
 		return fmt.Errorf("you're already out: %s", p.Away.Label)
 	}
+	if p.Job != nil && p.Job.Kind == "errand" {
+		return fmt.Errorf("you're already out: %s", p.Job.Label)
+	}
 	e.Until = w.Clock + int64(ErrandByID("raid").Hours*60)
 	return w.depart(p, e)
 }
@@ -232,6 +337,25 @@ func (w *World) autoHunt(wk *Worker) {
 		e.TextKind = "bad"
 	}
 	w.depart(wk, e)
+}
+
+// departTo is an errand you can watch: the worker walks there, works, and
+// walks home. The payload lands when the work step ends.
+func (w *World) departTo(p *Worker, e *Errand, at Pos, minutes int) error {
+	if p.Asleep {
+		p.Asleep = false
+	}
+	w.dropBack(p)
+	w.unreserve(jobMachine(p))
+	p.Path = nil
+	p.Job = &Job{Kind: "errand", Label: e.Label, Errand: e,
+		Steps: []Step{{Dest: at, Work: minutes, Do: "finish_errand"}, {Dest: FrontDoor, Work: 0, Do: "noop"}}}
+	p.Job.Timer = minutes
+	if p.Kind == "cannibal" {
+		w.Stats.Errands++
+	}
+	w.say("info", "%s left: %s.", p.Name, e.Label)
+	return nil
 }
 
 func (w *World) depart(p *Worker, e *Errand) error {
@@ -257,6 +381,11 @@ func (w *World) returnHome(p *Worker) {
 	e := p.Away
 	p.Away = nil
 	p.Pos = FrontDoor
+	w.applyErrand(p, e)
+}
+
+// applyErrand lands an errand's payload on the house.
+func (w *World) applyErrand(p *Worker, e *Errand) {
 	w.Cash += float64(e.Cash)
 	if e.Kind != "work" && e.Kind != "market" {
 		w.Stats.Looted += e.Cash
@@ -327,6 +456,11 @@ func (w *World) SetPolicy(p Policy) {
 	p.ButcherMarbling = clamp(p.ButcherMarbling, 1, 5)
 	p.KeepLivestock = clamp(p.KeepLivestock, 0, 5)
 	p.PantryTarget = clamp(p.PantryTarget, 0, 16)
+	switch p.Intake {
+	case "hungry", "never":
+	default:
+		p.Intake = "always"
+	}
 	p.FeedReserve = clamp(p.FeedReserve, 0, 500)
 	w.Policy = p
 }
@@ -359,6 +493,26 @@ func (w *World) Order(id int, order string) error {
 	default:
 		w.say("info", "%s goes back to being livestock like anybody else.", l.Name)
 	}
+	return nil
+}
+
+// Dig asks for one bag to be dug back up from a plot.
+func (w *World) Dig(plot string) error {
+	f := FixtureByID(plot)
+	if f == nil || f.Kind != KindPlot || !w.Fixtures[plot] {
+		return errors.New("that's not a plot you own")
+	}
+	if w.Buried == 0 {
+		return errors.New("nothing is buried")
+	}
+	if w.DigOrders == nil {
+		w.DigOrders = map[string]int{}
+	}
+	if w.DigOrders[plot] >= w.Buried {
+		return errors.New("that's already everything")
+	}
+	w.DigOrders[plot]++
+	w.say("info", "Someone will dig a bag back up from the %s.", strings.ToLower(f.Name))
 	return nil
 }
 
@@ -414,7 +568,7 @@ func (w *World) Inherit() error {
 	w.Stars = 0
 	w.Stats = Stats{}
 	w.Livestock, w.Passers, w.Visitors, w.Missing = nil, nil, nil, nil
-	w.Fridge, w.Pantry, w.Pile, w.Driveway, w.Stand = nil, nil, nil, nil, nil
+	w.Fridge, w.Pantry, w.Pile, w.Driveway, w.Stand, w.Booth = nil, nil, nil, nil, nil, nil
 	w.Buried, w.Compost = 0, 0
 	w.Machines = map[string]*Machine{}
 	w.RaidCalled = false
@@ -473,6 +627,8 @@ func (w *World) Apply(c Command) error {
 		return w.StartErrand(c.Name)
 	case "role":
 		return w.SetRole(c.ID, c.Name)
+	case "dig":
+		return w.Dig(c.Name)
 	case "order":
 		return w.Order(c.ID, c.Name)
 	case "toggle":

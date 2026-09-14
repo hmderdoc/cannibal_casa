@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sort"
 )
 
 // Item is anything that sits in a container or a worker's hands: a cut of
@@ -18,6 +19,7 @@ type Item struct {
 	Born     int64  `json:"born"`
 	Frozen   bool   `json:"frozen,omitempty"`
 	Ref      int    `json:"ref,omitempty"` // livestock id when Kind == livestock
+	Dug      bool   `json:"dug,omitempty"` // evidence dug back up: never reburied, only destroyed
 }
 
 // Livestock is a person in a cell.
@@ -42,14 +44,15 @@ type Step struct {
 
 // Job is what a worker is doing. It is data so a save mid-job resumes cleanly.
 type Job struct {
-	Kind    string `json:"kind"`
-	Steps   []Step `json:"steps"`
-	Step    int    `json:"step"`
-	Timer   int    `json:"timer"`
-	Machine string `json:"machine,omitempty"`
-	Target  int    `json:"target,omitempty"`
-	Recipe  string `json:"recipe,omitempty"`
-	Label   string `json:"label"`
+	Kind    string  `json:"kind"`
+	Steps   []Step  `json:"steps"`
+	Step    int     `json:"step"`
+	Timer   int     `json:"timer"`
+	Machine string  `json:"machine,omitempty"`
+	Target  int     `json:"target,omitempty"`
+	Recipe  string  `json:"recipe,omitempty"`
+	Label   string  `json:"label"`
+	Errand  *Errand `json:"errand,omitempty"` // an on-map errand's payload, applied when the work step ends
 }
 
 // Worker is the cannibal or a Renfield: an entity that walks the house doing
@@ -74,6 +77,11 @@ type Worker struct {
 	Active   int64   `json:"active,omitempty"` // clock of the last real job (not idling or sleeping)
 }
 
+// Out reports whether a worker is away on an errand, on the map or off it.
+func (wk *Worker) Out() bool {
+	return wk.Away != nil || (wk.Job != nil && wk.Job.Kind == "errand")
+}
+
 // Busy reports whether a worker is doing something worth watching.
 func (wk *Worker) Busy() bool {
 	if wk.Asleep || wk.Job == nil {
@@ -94,6 +102,7 @@ const (
 	RoleGuard = "guard" // patrols the cells: escapes rare, raiders repelled
 	RoleShill = "shill" // works the porch: the lures pull harder
 	RoleGimp  = "gimp"  // lives in the basement: livestock stays quiet and calm
+	RoleClerk = "clerk" // works the mall booth: stocks it and stands behind it
 )
 
 var Roles = []struct{ ID, Name, Desc string }{
@@ -102,6 +111,7 @@ var Roles = []struct{ ID, Name, Desc string }{
 	{RoleGuard, "Guard", "Patrols the cells and the doors. Escapes drop to a third; raiders on your house face them."},
 	{RoleShill, "Shill", "Stands on the porch being friendly. Every lure pulls harder. Also minds the stand."},
 	{RoleGimp, "Gimp", "Lives in the basement, in the suit. The livestock stops screaming and stops trying the door."},
+	{RoleClerk, "Clerk", "Works the mall booth: carries stock over from the shelf and stands behind the counter. Needs a booth."},
 }
 
 func RoleName(id string) string {
@@ -138,6 +148,7 @@ type Passerby struct {
 	State  string `json:"state"` // walk | lured | flee
 	Path   []Pos  `json:"path,omitempty"`
 	Pair   bool   `json:"pair,omitempty"`
+	Bought bool   `json:"bought,omitempty"` // mall customer who already bought
 }
 
 // Visitor is someone the street sends: an inspector, the dog, the police.
@@ -174,12 +185,13 @@ type Policy struct {
 	Brainwash       bool            `json:"brainwash"`
 	FeedReserve     int             `json:"feed_reserve"` // don't spend feed money below this cash
 	Freeze          bool            `json:"freeze"`       // overflow cuts into the freezer
+	Intake          string          `json:"intake"`       // always | hungry (only while the fridge is under half) | never
 }
 
 func DefaultPolicy() Policy {
 	return Policy{ButcherMarbling: 4, ButcherWhenFull: true, PantryTarget: 3,
 		Sell:        map[string]bool{"meat_pie": true, "jerky": true, "broth": true, "soap": true, "fritters": true},
-		FeedReserve: 20, Freeze: true}
+		FeedReserve: 20, Freeze: true, Intake: "always"}
 }
 
 // Line is a ticker entry.
@@ -252,22 +264,28 @@ type World struct {
 	Passers   []*Passerby  `json:"passers"`
 	Visitors  []*Visitor   `json:"visitors"`
 
-	Fridge   []Item `json:"fridge"`
-	Pantry   []Item `json:"pantry"`
-	Pile     []Item `json:"pile"`
-	Driveway []Item `json:"driveway"`
-	Stand    []Item `json:"stand"`
-	Buried   int    `json:"buried"`
-	Compost  int    `json:"compost"`
+	Fridge    []Item         `json:"fridge"`
+	Pantry    []Item         `json:"pantry"`
+	Pile      []Item         `json:"pile"`
+	Driveway  []Item         `json:"driveway"`
+	Stand     []Item         `json:"stand"`
+	Booth     []Item         `json:"booth,omitempty"` // stock at the mall
+	Buried    int            `json:"buried"`
+	BuriedAt  []int64        `json:"buried_at,omitempty"` // when each buried bag went in; old ones return to the earth
+	Compost   int            `json:"compost"`
+	DigOrders map[string]int `json:"dig_orders,omitempty"` // plot instance -> bags to dig up
 
 	Missing      []Missing `json:"missing"`
 	LastInspect  int64     `json:"last_inspect"`
 	InspectTier  int       `json:"inspect_tier"` // highest tier that has already sent someone
 	RaidCalled   bool      `json:"raid_called"`
 	NextPasserby int64     `json:"next_passerby"`
+	NextShopper  int64     `json:"next_shopper"`
 	TrapReady    int64     `json:"trap_ready"`
 
-	LastRaid map[string]int64 `json:"last_raid,omitempty"` // target key -> unix day of the last raid
+	LastRaid  map[string]int64 `json:"last_raid,omitempty"` // target key -> unix day of the last raid
+	LastParty int64            `json:"last_party,omitempty"`
+	Complete  bool             `json:"complete,omitempty"` // every one-off fixture owned, announced once
 
 	// Running totals since the last morning report, so small drains get a line.
 	SpentFeed float64 `json:"spent_feed"`
@@ -301,8 +319,12 @@ func New(handle, bbs string, seed int64) *World {
 	w.Cannibal = randomCannibalName(w.rng())
 	for _, f := range Fixtures {
 		if f.Starter {
-			w.Fixtures[f.ID] = true
-			w.Placed[f.ID] = f.At
+			id := f.ID
+			if f.Repeat {
+				id += "#1"
+			}
+			w.Fixtures[id] = true
+			w.Placed[id] = f.At
 		}
 	}
 	w.Workers = append(w.Workers, &Worker{ID: w.newID(), Name: w.Cannibal, Kind: "cannibal",
@@ -337,7 +359,39 @@ func (w *World) post(kind, format string, a ...any) {
 	w.Posts = append(w.Posts, Event{Kind: kind, Text: fmt.Sprintf(format, a...)})
 }
 
-func (w *World) Has(id string) bool { return w.Fixtures[id] }
+// Has reports ownership of a fixture; for a repeatable template, of any instance.
+func (w *World) Has(id string) bool {
+	if w.Fixtures[id] {
+		return true
+	}
+	if f := fixtureByID[id]; f != nil && f.Repeat {
+		for owned := range w.Fixtures {
+			if Template(owned) == id {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Instances counts owned copies of a repeatable fixture.
+func (w *World) Instances(template string) int {
+	n := 0
+	for owned := range w.Fixtures {
+		if Template(owned) == template {
+			n++
+		}
+	}
+	return n
+}
+
+// NextCost is what the next copy of a repeatable costs.
+func (w *World) NextCost(f *Fixture) int {
+	if !f.Repeat {
+		return f.Cost
+	}
+	return f.Cost + f.CostStep*w.Instances(f.ID)
+}
 
 // Pos is where an owned fixture sits (its default when unplaced).
 func (w *World) Pos(id string) Pos {
@@ -350,11 +404,14 @@ func (w *World) Pos(id string) Pos {
 	return Pos{}
 }
 
-// FixtureAt returns the owned fixture on a tile, or nil.
+// FixtureAt returns the owned fixture on a tile (an instance copy carrying
+// its instance id), or nil.
 func (w *World) FixtureAt(p Pos) *Fixture {
 	for id, at := range w.Placed {
 		if at == p && w.Fixtures[id] {
-			return FixtureByID(id)
+			f := *FixtureByID(id)
+			f.ID = id
+			return &f
 		}
 	}
 	return nil
@@ -372,8 +429,11 @@ func (w *World) CanPlace(f *Fixture, p Pos) error {
 	if f.Front && !inPorch(p) {
 		return fmt.Errorf("the %s has to be out front, on the porch", f.Name)
 	}
+	if p.L == Mall && p.Y != ConcourseY {
+		return fmt.Errorf("the %s goes on the concourse, where the customers walk", f.Name)
+	}
 	if o := w.FixtureAt(p); o != nil && o.ID != f.ID {
-		return fmt.Errorf("the %s is already there", o.Name)
+		return fmt.Errorf("the %s is already there", InstanceName(o.ID))
 	}
 	return nil
 }
@@ -426,25 +486,29 @@ func (w *World) machine(id string) *Machine {
 	return m
 }
 
-// Owned fixtures of a kind.
+// ownedOfKind lists owned fixtures of a kind. Instances of a repeatable come
+// back as copies of the template with the instance id, sorted by id.
 func (w *World) ownedOfKind(kind string) []*Fixture {
-	var out []*Fixture
-	for i := range Fixtures {
-		f := &Fixtures[i]
-		if f.Kind == kind && w.Fixtures[f.ID] {
-			out = append(out, f)
+	var ids []string
+	for id := range w.Fixtures {
+		if f := FixtureByID(id); f != nil && f.Kind == kind {
+			ids = append(ids, id)
 		}
+	}
+	sort.Strings(ids)
+	var out []*Fixture
+	for _, id := range ids {
+		f := *FixtureByID(id)
+		f.ID = id
+		out = append(out, &f)
 	}
 	return out
 }
 
 func (w *World) capacity(kind string, ids ...string) int {
 	n := 0
-	for _, f := range Fixtures {
-		if f.Kind != kind || !w.Fixtures[f.ID] {
-			continue
-		}
-		if len(ids) > 0 && !contains(ids, f.ID) {
+	for _, f := range w.ownedOfKind(kind) {
+		if len(ids) > 0 && !contains(ids, Template(f.ID)) {
 			continue
 		}
 		n += f.Capacity
@@ -452,23 +516,24 @@ func (w *World) capacity(kind string, ids ...string) int {
 	return n
 }
 
-func (w *World) FridgeCap() int  { return w.capacity(KindContainer, "fridge", "fridge_big") }
-func (w *World) FreezerCap() int { return w.capacity(KindContainer, "freezer", "chest_freezer") }
-func (w *World) PantryCap() int  { return w.capacity(KindContainer, "pantry", "pantry_big") }
-func (w *World) PlotCap() int    { return w.capacity(KindPlot) }
-func (w *World) StandCap() int   { return w.capacity(KindStand) }
+func (w *World) FridgeCap() int { return w.capacity(KindContainer, "fridge", "fridge_big") }
+func (w *World) FreezerCap() int {
+	return w.capacity(KindContainer, "freezer", "chest_freezer", "walk_in")
+}
+func (w *World) PantryCap() int { return w.capacity(KindContainer, "pantry", "pantry_big") }
+func (w *World) PlotCap() int   { return w.capacity(KindPlot) }
+func (w *World) StandCap() int  { return w.capacity(KindStand) }
+func (w *World) BoothCap() int  { return w.capacity(KindBooth) }
+func (w *World) boothID() string {
+	for _, f := range w.ownedOfKind(KindBooth) {
+		return f.ID
+	}
+	return ""
+}
 func (w *World) Cells() []*Fixture {
 	return w.ownedOfKind(KindCell)
 }
-func (w *World) CotCount() int {
-	n := 0
-	for _, f := range w.ownedOfKind(KindBed) {
-		if f.ID != "bed" {
-			n++
-		}
-	}
-	return n
-}
+func (w *World) CotCount() int { return w.Instances("cot") }
 
 func (w *World) fridgeUsed() (fresh, frozen int) {
 	for _, c := range w.Fridge {

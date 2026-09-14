@@ -26,7 +26,7 @@ func main() {
 	dropfile := "DOOR32.SYS"
 	forceLocal, utf8, snapshot, snapMenu := false, false, false, false
 	handleArg := ""
-	cols, rows, snapDays := 0, 0, 0
+	cols, rows, snapDays, snapLevel := 0, 0, 0, 0
 	for i := 1; i < len(os.Args); i++ {
 		a := os.Args[i]
 		switch {
@@ -50,6 +50,9 @@ func main() {
 		case a == "-snapshot-days" && i+1 < len(os.Args):
 			i++
 			snapDays, _ = strconv.Atoi(os.Args[i])
+		case a == "-snapshot-level" && i+1 < len(os.Args):
+			i++
+			snapLevel, _ = strconv.Atoi(os.Args[i])
 		case a == "-size" && i+1 < len(os.Args):
 			i++
 			if c, r, ok := strings.Cut(os.Args[i], "x"); ok {
@@ -77,7 +80,7 @@ func main() {
 	}
 
 	if snapshot {
-		runSnapshot(cfg, bbs, handle, cols, rows, snapDays, snapMenu)
+		runSnapshot(cfg, bbs, handle, cols, rows, snapDays, snapMenu, snapLevel)
 		return
 	}
 
@@ -161,7 +164,7 @@ func main() {
 
 // runSnapshot renders one frame of the main screen as UTF-8 ANSI to stdout,
 // after running the house for -snapshot-days, for eyeballing the layout.
-func runSnapshot(cfg config, bbs, handle string, cols, rows, days int, menu bool) {
+func runSnapshot(cfg config, bbs, handle string, cols, rows, days int, menu bool, level int) {
 	if cols == 0 {
 		cols, rows = 80, 24
 	}
@@ -175,7 +178,7 @@ func runSnapshot(cfg config, bbs, handle string, cols, rows, days int, menu bool
 	a.modal = nil
 	if days > 0 && a.w != nil {
 		a.w.Cash = 2000
-		for _, id := range []string{"lure_couch", "cell_2", "grinder", "microwave", "compost", "fence", "chair", "cot", "smoker"} {
+		for _, id := range []string{"lure_couch", "cell", "grinder", "microwave", "compost", "fence", "chair", "cot", "smoker", "booth"} {
 			f := sim.FixtureByID(id)
 			p := sim.Plans[f.Level]
 			for y := 0; y < len(p.Rows); y++ {
@@ -200,6 +203,7 @@ func runSnapshot(cfg config, bbs, handle string, cols, rows, days int, menu bool
 	if menu && a.w != nil {
 		a.openBuild("")
 	}
+	a.level = sim.Level(level)
 	w := bufio.NewWriter(os.Stdout)
 	a.render()
 	buf.Flush(w)

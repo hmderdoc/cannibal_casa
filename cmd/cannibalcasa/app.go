@@ -311,6 +311,9 @@ func (a *app) quickview() string {
 		return "Wall"
 	}
 	room := a.level.String()
+	if a.level == sim.Mall && a.cy == sim.ConcourseY {
+		return "The concourse. Customers walk it all day; a booth here sells to them."
+	}
 	for _, r := range p.Rooms {
 		if a.cy >= r.Y-3 && a.cy <= r.Y+3 && a.cx >= r.X-2 && a.cx <= r.X+18 {
 			room = capitalize(strings.ToLower(r.Name))
@@ -457,6 +460,8 @@ func (a *app) startPlacing(id string, move bool) {
 		a.cx, a.cy = at.X, at.Y
 	} else if f.Front {
 		a.cx, a.cy = 2, 3
+	} else if f.Level == sim.Mall {
+		a.cx, a.cy = 22, sim.ConcourseY
 	} else {
 		p := a.plan()
 		found := false

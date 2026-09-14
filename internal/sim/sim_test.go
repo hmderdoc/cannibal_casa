@@ -31,7 +31,7 @@ func TestMachineRunsUnattended(t *testing.T) {
 func TestWorkersNeverStrand(t *testing.T) {
 	w := New("t", "b", 3)
 	w.Cash = 3000
-	for _, id := range []string{"lure_couch", "lure_wifi", "cell_2", "cell_3", "grinder", "stand_big", "microwave", "compost", "stockpot", "chair", "cot", "freezer", "smoker", "fence"} {
+	for _, id := range []string{"lure_couch", "lure_wifi", "cell", "cell", "grinder", "stand_big", "microwave", "compost", "stockpot", "chair", "cot", "freezer", "smoker", "fence"} {
 		if err := w.Build(id, w.freeTile(FixtureByID(id))); err != nil {
 			t.Fatalf("build %s: %v", id, err)
 		}
@@ -129,8 +129,11 @@ func TestBuildReplacesTrap(t *testing.T) {
 	if err := w.Build("lure_couch", Pos{Ground, 20, 7}); err == nil {
 		t.Fatal("lures must go on the porch")
 	}
-	if err := w.Build("cell_2", Pos{Ground, 20, 7}); err == nil {
+	if err := w.Build("cell", Pos{Ground, 20, 7}); err == nil {
 		t.Fatal("cells must go in the basement")
+	}
+	if err := w.Build("cell", Pos{Basement, 8, 1}); err != nil || !w.Fixtures["cell#2"] || w.NextCost(FixtureByID("cell")) != 100+2*75 {
+		t.Fatalf("repeatable cell: %v owned=%v next=%d", err, w.Fixtures["cell#2"], w.NextCost(FixtureByID("cell")))
 	}
 	if err := w.Build("lure_couch", w.Pos("stand")); err == nil {
 		t.Fatal("can't stack on the stand")
@@ -153,12 +156,15 @@ func TestErrandsRoundTrip(t *testing.T) {
 		t.Fatal("can't leave twice")
 	}
 	p := w.Player()
-	if p.Away == nil {
-		t.Fatal("not away")
+	if !p.Out() {
+		t.Fatal("not out")
 	}
-	w.Advance(4*60 + 5)
-	if p.Away != nil || w.Cash <= cash {
-		t.Fatalf("didn't come home paid: away=%v cash %.0f -> %.0f", p.Away, cash, w.Cash)
+	w.Advance(7 * 60)
+	if p.Out() || w.Cash <= cash {
+		t.Fatalf("didn't come home paid: out=%v cash %.0f -> %.0f", p.Out(), cash, w.Cash)
+	}
+	if p.Pos.L != Ground {
+		t.Fatalf("still at the mall: %v", p.Pos)
 	}
 	w.Advance(day)
 	e := &Errand{Kind: "raid", Label: "raiding a neighbor", Cash: 50, Heat: 0, Text: "Got in and out.", TextKind: "cash"}
@@ -190,12 +196,12 @@ func TestDirectOrders(t *testing.T) {
 	w.Cash = 2000
 	w.Build("chair", Pos{Ground, 20, 11})
 	w.Build("cot", Pos{Attic, 3, 1})
-	w.Build("cell_2", Pos{Basement, 8, 1})
+	w.Build("cell", Pos{Basement, 8, 1})
 	w.Policy.Brainwash = false
 	w.Policy.ButcherMarbling = 5
 	w.Livestock = append(w.Livestock,
-		&Livestock{ID: w.newID(), Victim: "crossfit", Name: "A", Cell: "cell_1", Marbling: 1, Since: w.Clock},
-		&Livestock{ID: w.newID(), Victim: "mlm", Name: "B", Cell: "cell_2", Marbling: 3, Since: w.Clock})
+		&Livestock{ID: w.newID(), Victim: "crossfit", Name: "A", Cell: "cell#1", Marbling: 1, Since: w.Clock},
+		&Livestock{ID: w.newID(), Victim: "mlm", Name: "B", Cell: "cell#2", Marbling: 3, Since: w.Clock})
 	if err := w.Order(w.Livestock[0].ID, "chair"); err != nil {
 		t.Fatal(err)
 	}
@@ -221,14 +227,14 @@ func TestDirectOrders(t *testing.T) {
 func TestReset(t *testing.T) {
 	w := New("t", "b", 5)
 	w.Cash = 900
-	w.Build("cell_2", Pos{Basement, 8, 1})
+	w.Build("cell", Pos{Basement, 8, 1})
 	w.Heat = 100
 	w.Advance(3 * 60)
 	w.Inherit()
 	w.ColorMode = "256"
 	w.Reset()
-	if !w.Alive || w.Generation != 1 || len(w.Ancestors) != 0 || w.Has("cell_2") || w.Cash != 150 || w.ColorMode != "256" || w.Handle != "t" {
-		t.Fatalf("reset wrong: gen=%d anc=%d cell2=%v cash=%.0f color=%q", w.Generation, len(w.Ancestors), w.Has("cell_2"), w.Cash, w.ColorMode)
+	if !w.Alive || w.Generation != 1 || len(w.Ancestors) != 0 || w.Instances("cell") != 1 || w.Cash != 150 || w.ColorMode != "256" || w.Handle != "t" {
+		t.Fatalf("reset wrong: gen=%d anc=%d cells=%d cash=%.0f color=%q", w.Generation, len(w.Ancestors), w.Instances("cell"), w.Cash, w.ColorMode)
 	}
 	w.Advance(day)
 }
@@ -262,11 +268,11 @@ func TestRoleChangeDropsCarry(t *testing.T) {
 	w.Cash = 2000
 	w.Build("chair", Pos{Ground, 20, 11})
 	w.Build("cot", Pos{Attic, 3, 1})
-	w.Build("cot_2", Pos{Attic, 5, 1}) // one for R, one for the guest
+	w.Build("cot", Pos{Attic, 5, 1}) // one for R, one for the guest
 	w.Build("chipper", Pos{Backyard, 10, 2})
-	r := &Worker{ID: w.newID(), Name: "R", Kind: "renfield", Pos: w.Pos("cell_1"), Hunger: 80, Energy: 80, Loyalty: 80}
+	r := &Worker{ID: w.newID(), Name: "R", Kind: "renfield", Pos: w.Pos("cell#1"), Hunger: 80, Energy: 80, Loyalty: 80}
 	w.Workers = append(w.Workers, r)
-	l := &Livestock{ID: w.newID(), Victim: "mlm", Name: "T", Cell: "cell_1", Marbling: 3, Since: w.Clock}
+	l := &Livestock{ID: w.newID(), Victim: "mlm", Name: "T", Cell: "cell#1", Marbling: 3, Since: w.Clock}
 	w.Livestock = append(w.Livestock, l)
 	w.Pile = append(w.Pile, Item{ID: w.newID(), Kind: "evidence", Sub: "bones", Born: w.Clock})
 	if err := w.Order(l.ID, "chair"); err != nil {
@@ -333,5 +339,46 @@ func TestCannibalNamesAgree(t *testing.T) {
 		if g1, g2 := gender[rel], gender[first]; g1 != "" && g2 != "" && g1 != g2 {
 			t.Fatalf("mismatched dynasty name %q", name)
 		}
+	}
+}
+
+func TestMallBoothSells(t *testing.T) {
+	w := New("t", "b", 17)
+	w.Cash = 1000
+	if err := w.Build("booth", Pos{Mall, 5, 2}); err == nil {
+		t.Fatal("booth off the concourse should be refused")
+	}
+	if err := w.Build("booth", Pos{Mall, 22, ConcourseY}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 6; i++ {
+		w.Booth = append(w.Booth, Item{ID: w.newID(), Kind: "dish", Sub: "meat_pie", Quality: 3, Born: w.Clock})
+	}
+	w.Clock = 10 * 60 // opening time
+	cash := w.Cash
+	w.Advance(4 * 60)
+	if w.Stats.Sold == 0 || w.Cash <= cash-4 {
+		t.Fatalf("no mall sales: sold=%d cash %.0f -> %.0f", w.Stats.Sold, cash, w.Cash)
+	}
+}
+
+func TestIntakeNever(t *testing.T) {
+	w := New("t", "b", 18)
+	w.Policy.Intake = "never"
+	w.Advance(5 * day)
+	if w.Stats.Captured != 0 {
+		t.Fatalf("laying low still captured %d", w.Stats.Captured)
+	}
+}
+
+func TestDigUp(t *testing.T) {
+	w := New("t", "b", 19)
+	w.Buried, w.BuriedAt = 2, []int64{w.Clock, w.Clock}
+	if err := w.Dig("plot#1"); err != nil {
+		t.Fatal(err)
+	}
+	w.Advance(6 * 60)
+	if w.Buried != 1 || len(w.Pile) == 0 {
+		t.Fatalf("dig didn't happen: buried=%d pile=%d", w.Buried, len(w.Pile))
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,6 +80,38 @@ func (st *Store) Load(key string) (*sim.World, error) {
 	}
 	if w.Placed == nil {
 		w.Placed = map[string]sim.Pos{}
+	}
+	// Fixed cells/plots/cots from before repeatables become instances.
+	rename := func(old, inst string) {
+		if !w.Fixtures[old] {
+			return
+		}
+		delete(w.Fixtures, old)
+		w.Fixtures[inst] = true
+		if at, ok := w.Placed[old]; ok {
+			delete(w.Placed, old)
+			w.Placed[inst] = at
+		}
+		for _, l := range w.Livestock {
+			if l.Cell == old {
+				l.Cell = inst
+			}
+		}
+		for _, wk := range w.Workers {
+			if wk.Job != nil && wk.Job.Machine == old {
+				wk.Job.Machine = inst
+			}
+		}
+	}
+	for i := 1; i <= 5; i++ {
+		rename(fmt.Sprintf("cell_%d", i), fmt.Sprintf("cell#%d", i))
+	}
+	for i := 1; i <= 3; i++ {
+		rename(fmt.Sprintf("plot_%d", i), fmt.Sprintf("plot#%d", i))
+	}
+	rename("cot", "cot#1")
+	for i := 2; i <= 4; i++ {
+		rename(fmt.Sprintf("cot_%d", i), fmt.Sprintf("cot#%d", i))
 	}
 	// A save from before free placement: give every owned fixture a tile.
 	for id := range w.Fixtures {

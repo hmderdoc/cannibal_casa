@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"cannibalcasa/internal/sim"
@@ -91,6 +92,8 @@ func explain(w *sim.World, f *sim.Fixture) []sim.Line {
 		out = append(out, sim.Line{Kind: "info", Text: "Butchering. Guests become cuts for the fridge and bags for the back step."})
 	case sim.KindVan:
 		out = append(out, sim.Line{Kind: "info", Text: "Hauls away the cars your visitors leave at the curb, and helps on raids."})
+	case sim.KindBooth:
+		out = append(out, sim.Line{Kind: "info", Text: "Your spot at the mall. Customers on the concourse buy what's stocked, at mall prices, and every sale makes you a little more respectable. A clerk keeps it stocked; rent comes out hourly."})
 	case sim.KindPassive:
 		out = append(out, sim.Line{Kind: "info", Text: effects[f.ID]})
 	}
@@ -98,6 +101,12 @@ func explain(w *sim.World, f *sim.Fixture) []sim.Line {
 		out = append(out, sim.Line{Kind: "info", Text: e})
 	}
 	where := "Goes anywhere on the " + f.Levels() + "."
+	if f.Level == sim.Mall {
+		where = "Goes on the mall concourse, where the customers walk."
+	}
+	if f.Repeat {
+		where += fmt.Sprintf(" Build as many as fit; each costs $%d more than the last.", f.CostStep)
+	}
 	if f.Front {
 		where = "Goes on the porch."
 	}

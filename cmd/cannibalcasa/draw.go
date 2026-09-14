@@ -52,6 +52,8 @@ func (a *app) levelBg(l sim.Level) ui.Attr {
 		return ui.Col("bg_yard")
 	case sim.Attic:
 		return ui.Col("bg_attic")
+	case sim.Mall:
+		return ui.Col("bg_mall")
 	}
 	return ui.Col("bg_ground")
 }
@@ -97,6 +99,10 @@ func (a *app) fixtureCell(f *sim.Fixture, floorBg ui.Attr, occupants map[string]
 		if len(a.w.Stand) > 0 {
 			bg = ui.Col("bg_busy")
 		}
+	case sim.KindBooth:
+		if len(a.w.Booth) > 0 {
+			bg = ui.Col("bg_busy")
+		}
 	case sim.KindCell:
 		fg = ui.Col("dim")
 	}
@@ -128,6 +134,8 @@ func (a *app) drawMap(ox, oy int) {
 		}
 	case sim.Attic:
 		wallCol = ui.Col("wall_attic")
+	case sim.Mall:
+		wallCol = ui.Col("wall_mall")
 	}
 	isWall := func(x, y int) bool {
 		return y >= 0 && y < len(p.Rows) && x >= 0 && x < len(p.Rows[y]) && p.Rows[y][x] == '#'
@@ -348,8 +356,15 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	x2 := stat(b, x, y, "Cells", fmt.Sprintf("%d/%d", len(s.Livestock), len(s.Cells())), pick(hungry > 0, ui.Col("warn"), ui.Col("food")))
 	stat(b, x2+2, y, "Fridge", fmt.Sprintf("%d/%d+%d", fresh, s.FridgeCap(), frozen), pick(fresh >= s.FridgeCap(), ui.Col("bad"), ui.Col("food")))
 	y++
+	gap := 2
+	if s.BoothCap() > 0 {
+		gap = 1
+	}
 	x2 = stat(b, x, y, "Shelf", fmt.Sprintf("%d/%d", len(s.Pantry), s.PantryCap()), pick(len(s.Pantry) == 0, ui.Col("warn"), pick(len(s.Pantry) >= s.PantryCap(), ui.Col("bad"), ui.Col("food"))))
-	stat(b, x2+2, y, "Stand", fmt.Sprintf("%d/%d", len(s.Stand), s.StandCap()), ui.Col("cash"))
+	x2 = stat(b, x2+gap, y, "Stand", fmt.Sprintf("%d/%d", len(s.Stand), s.StandCap()), ui.Col("cash"))
+	if s.BoothCap() > 0 {
+		stat(b, x2+gap, y, "Mall", fmt.Sprintf("%d/%d", len(s.Booth), s.BoothCap()), ui.Col("cash"))
+	}
 	y++
 	// Evidence line: green when clean, yellow when there's work, red on a background when it's a problem.
 	pile, cars := len(s.Pile), len(s.Driveway)
