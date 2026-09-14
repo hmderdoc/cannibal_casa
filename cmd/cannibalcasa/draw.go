@@ -472,7 +472,7 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 			}
 		}
 		if stamp > 0 && n == 0 {
-			b.PrintBlink(ox+2, y, l.Text[:stamp], ui.Col("key"), ui.Black)
+			b.PrintBlink(ox+2, y, l.Text[:stamp], kindColor(l.Kind).Counterpart(), ui.Black)
 			b.PrintN(ox+2+stamp, y, l.Text[stamp:], w-4-stamp, kindColor(l.Kind), ui.Black)
 		} else if stamp > 0 {
 			b.Print(ox+2, y, l.Text[:stamp], ui.Col("label"), ui.Black)

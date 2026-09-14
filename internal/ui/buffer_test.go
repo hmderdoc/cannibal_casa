@@ -61,3 +61,12 @@ func TestBlink(t *testing.T) {
 		t.Fatalf("blink should reset for the next cell: %q", s)
 	}
 }
+
+func TestCounterpart(t *testing.T) {
+	cases := map[Attr]Attr{BrightRed: Red, Red: BrightRed, Yellow: Brown, Brown: Yellow, BrightWhite: White, Gray: Black, Orange: Brown, Pink: Magenta, Lime: Green}
+	for in, want := range cases {
+		if got := in.Counterpart(); got != want {
+			t.Errorf("%v.Counterpart() = %v, want %v", in, got, want)
+		}
+	}
+}

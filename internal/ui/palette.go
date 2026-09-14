@@ -39,6 +39,17 @@ var (
 	Lavender = Attr{13, 141}
 )
 
+// base16 lists the classic colors by index so a hue's counterpart can be found.
+var base16 = [16]Attr{Black, Red, Green, Brown, Blue, Magenta, Cyan, White,
+	Gray, BrightRed, BrightGreen, Yellow, BrightBlue, BrightMagenta, BrightCyan, BrightWhite}
+
+// Counterpart is the same hue at the other intensity: red for light red,
+// light red for red, brown for yellow, and so on. Extra 256-color hues map
+// through their classic twin.
+func (a Attr) Counterpart() Attr {
+	return base16[(a.C16^8)&15]
+}
+
 // Palette is the semantic color table. Game data names colors by role
 // ("victim_prime", "fix_cold"); the door looks them up here so a re-theme is
 // one table edit.
