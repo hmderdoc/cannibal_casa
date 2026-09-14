@@ -275,7 +275,7 @@ func (pl *placer) draw(a *app, b *ui.Buffer) {
 	if f.Front {
 		where = "the porch"
 	}
-	msg := fmt.Sprintf(" %s the %s: arrows move, Enter drops it, Esc cancels. Goes on %s. ", verb, f.Name, where)
+	msg := fmt.Sprintf(" %s the %s (%s): arrows move, Enter drops it, Esc cancels. Goes on %s. ", verb, f.Name, category(f), where)
 	if err := a.w.CanPlace(f, sim.Pos{L: a.level, X: a.cx, Y: a.cy}); err != nil {
 		msg = fmt.Sprintf(" %s the %s: %s. Esc cancels. ", verb, f.Name, capitalize(err.Error()))
 	}
@@ -305,6 +305,36 @@ func (a *app) startPlacing(id string, move bool) {
 		}
 	}
 	a.modal = &placer{id: id, move: move}
+}
+
+func category(f *sim.Fixture) string {
+	switch f.Kind {
+	case sim.KindLure:
+		return "lure: pulls people to the porch"
+	case sim.KindTrap:
+		return "trap: captures"
+	case sim.KindStand:
+		return "shop"
+	case sim.KindStation:
+		return "cooking station"
+	case sim.KindDisposal:
+		return "evidence disposal"
+	case sim.KindPlot:
+		return "burial"
+	case sim.KindContainer:
+		return "storage"
+	case sim.KindCell:
+		return "cell"
+	case sim.KindBed:
+		return "sleep"
+	case sim.KindChair:
+		return "brainwashing"
+	case sim.KindBlock:
+		return "butchering"
+	case sim.KindVan:
+		return "vehicle"
+	}
+	return "upgrade"
 }
 
 func trapOdds(w *sim.World, v *sim.Victim) int {

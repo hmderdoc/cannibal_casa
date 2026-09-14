@@ -101,7 +101,14 @@ func frame(b *ui.Buffer, wantW, wantH int) (x, y, w, h int) {
 func (m *menu) draw(a *app, b *ui.Buffer) {
 	descH := 0
 	if m.sel < len(m.items) && len(m.items[m.sel].desc) > 0 {
-		descH = 5
+		n := 0
+		for _, e := range m.items[m.sel].desc {
+			n += len(wrap(e.Text, 66))
+		}
+		descH = min(n+1, b.H/2)
+		if descH < 5 {
+			descH = 5
+		}
 	}
 	listH := min(len(m.items), b.H-6-descH)
 	if listH < 1 {
@@ -290,7 +297,7 @@ func (a *app) fixtureStatus(f *sim.Fixture) []sim.Line {
 	w := a.w
 	m := w.Machines[f.ID]
 	var out []sim.Line
-	out = append(out, sim.Line{Kind: "dim", Text: f.Desc})
+	out = append(out, explain(w, f)...)
 	switch f.Kind {
 	case sim.KindStation:
 		switch {
@@ -364,9 +371,6 @@ func (a *app) fixtureStatus(f *sim.Fixture) []sim.Line {
 	if m != nil && m.Off {
 		out = append(out, sim.Line{Kind: "warn", Text: "Switched OFF."})
 	}
-	if f.Draw > 0 {
-		out = append(out, sim.Line{Kind: "cash", Text: fmt.Sprintf("Utilities $%.2f/hour.", f.Draw)})
-	}
 	return out
 }
 
@@ -429,7 +433,7 @@ func (a *app) openBuild(focus string) {
 				continue
 			}
 			it := item{label: fmt.Sprintf("$%-4d %s", f.Cost, f.Name), color: ui.Col(f.Color)}
-			desc := []sim.Line{{Kind: "info", Text: f.Desc}}
+			desc := explain(w, f)
 			switch {
 			case f.Prereq != "" && !w.Has(f.Prereq):
 				it.disabled = true
@@ -439,9 +443,6 @@ func (a *app) openBuild(focus string) {
 				desc = append(desc, sim.Line{Kind: "warn", Text: fmt.Sprintf("Costs $%d; you have $%.0f.", f.Cost, w.Cash)})
 			default:
 				desc = append(desc, sim.Line{Kind: "cash", Text: fmt.Sprintf("Costs $%d of your $%.0f.", f.Cost, w.Cash)})
-			}
-			if f.Draw > 0 {
-				desc = append(desc, sim.Line{Kind: "dim", Text: fmt.Sprintf("Utilities $%.2f/hour.", f.Draw)})
 			}
 			it.desc = desc
 			it.onSelect = func(a *app) {
