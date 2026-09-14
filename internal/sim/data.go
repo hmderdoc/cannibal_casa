@@ -304,6 +304,10 @@ var Fixtures = []Fixture{
 		Desc: "A Renfield needs somewhere to sleep. One cot, one Renfield."},
 	{ID: "cot_2", Name: "Second Cot", Level: Attic, Cost: 120, Prereq: "cot", Glyph: 'n', Color: "fix_attic", Kind: KindBed,
 		Desc: "Bunk beds, technically."},
+	{ID: "cot_3", Name: "Third Cot", Level: Attic, Cost: 180, Prereq: "cot_2", Glyph: 'n', Color: "fix_attic", Kind: KindBed,
+		Desc: "The attic is a dormitory now. Lights out at ten."},
+	{ID: "cot_4", Name: "Fourth Cot", Level: Attic, Cost: 250, Prereq: "cot_3", Glyph: 'n', Color: "fix_attic", Kind: KindBed,
+		Desc: "Four Renfields. The HOA would call it a boarding house. The HOA is in cell 3."},
 	{ID: "soap_molds", Name: "Soap Molds", Level: Attic, Cost: 70, Prereq: "stockpot", Glyph: 'm', Color: "fix_attic", Kind: KindPassive,
 		Desc: "Paper Street Soap Co. Scraps into money on Etsy, one bar a day."},
 }

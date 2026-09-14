@@ -76,7 +76,7 @@ func (w *World) jobSleep(wk *Worker) *Job {
 	bed := "bed"
 	if wk.Kind != "cannibal" {
 		bed = ""
-		for _, f := range []string{"cot", "cot_2"} {
+		for _, f := range []string{"cot", "cot_2", "cot_3", "cot_4"} {
 			if w.Has(f) && !w.bedTaken(f, wk) {
 				bed = f
 				break
