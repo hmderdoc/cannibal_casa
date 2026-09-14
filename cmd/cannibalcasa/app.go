@@ -310,9 +310,9 @@ func (a *app) startPlacing(id string, move bool) {
 func category(f *sim.Fixture) string {
 	switch f.Kind {
 	case sim.KindLure:
-		return "lure: pulls people to the porch"
+		return "lure"
 	case sim.KindTrap:
-		return "trap: captures"
+		return "trap"
 	case sim.KindStand:
 		return "shop"
 	case sim.KindStation:
