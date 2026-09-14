@@ -39,9 +39,19 @@ func TestPlansConsistent(t *testing.T) {
 		}
 	}
 	for _, v := range Victims {
-		for _, l := range v.Lures {
-			if FixtureByID(l) == nil {
-				t.Errorf("victim %s lure %s missing", v.ID, l)
+		for _, tr := range v.Traits {
+			if Traits[tr] == "" {
+				t.Errorf("victim %s has unknown trait %q", v.ID, tr)
+			}
+		}
+	}
+	for _, f := range Fixtures {
+		if f.Kind == KindLure && len(f.Draws) == 0 {
+			t.Errorf("lure %s draws nobody", f.ID)
+		}
+		for _, d := range f.Draws {
+			if Traits[d] == "" {
+				t.Errorf("lure %s draws unknown trait %q", f.ID, d)
 			}
 		}
 	}

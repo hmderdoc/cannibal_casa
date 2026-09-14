@@ -211,8 +211,12 @@ func (a *app) inspectCursor() {
 	for _, ps := range a.w.Passers {
 		if ps.Pos == pos {
 			v := sim.VictimByID(ps.Victim)
+			var who []string
+			for _, t := range v.Traits {
+				who = append(who, sim.Traits[t])
+			}
 			a.modal = textPanel(v.Name, []sim.Line{{Kind: "dim", Text: v.Flavor},
-				{Kind: "info", Text: fmt.Sprintf("Marbling %s, fight %d. Missed after %d days (Heat %+.0f). Trap odds right now: %d%%.", strings.Repeat("*", v.Marbling), v.Fight, v.NoticeDays, v.HeatMissing, trapOdds(a.w, v))}})
+				{Kind: "info", Text: "One of " + strings.Join(who, ", ") + ". Marbling " + strings.Repeat("*", v.Marbling) + ", fight " + strings.Repeat("!", v.Fight) + "."}})
 			return
 		}
 	}

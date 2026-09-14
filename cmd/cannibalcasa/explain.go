@@ -37,17 +37,13 @@ func explain(w *sim.World, f *sim.Fixture) []sim.Line {
 	out := []sim.Line{{Kind: "dim", Text: f.Desc}}
 	switch f.Kind {
 	case sim.KindLure:
-		var names []string
-		for _, v := range sim.Victims {
-			for _, l := range v.Lures {
-				if l == f.ID {
-					names = append(names, v.Name)
-				}
-			}
+		var who []string
+		for _, d := range f.Draws {
+			who = append(who, sim.Traits[d])
 		}
 		text := "Lure. Draws people off the sidewalk onto the porch, where the trap can get them. It doesn't catch anyone by itself."
-		if len(names) > 0 {
-			text += " Works best on: " + strings.Join(names, ", ") + "."
+		if len(who) > 0 {
+			text += " Works best on " + strings.Join(who, " and ") + "."
 		}
 		out = append(out, sim.Line{Kind: "info", Text: text})
 	case sim.KindTrap:

@@ -104,10 +104,13 @@ func (w *World) rollVictim(r *rand.Rand) *Victim {
 		if v.ID == "hoa" && w.Tier() < 1 {
 			continue
 		}
-		for _, l := range v.Lures {
-			if w.Has(l) {
+		for _, f := range w.ownedOfKind(KindLure) {
+			if f.Appeals(v) {
 				wgt += 5
 			}
+		}
+		if w.Has("telescope") && v.Night {
+			wgt += 5
 		}
 		if wgt <= 0 {
 			continue
@@ -184,7 +187,7 @@ func (w *World) tryLure(p *Passerby, r *rand.Rand) bool {
 	v := VictimByID(p.Victim)
 	chance := 15 // per mille
 	for _, f := range w.ownedOfKind(KindLure) {
-		if contains(v.Lures, f.ID) {
+		if f.Appeals(v) {
 			chance += 30
 		} else {
 			chance += 6

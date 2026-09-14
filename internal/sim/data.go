@@ -17,7 +17,7 @@ type Victim struct {
 	NoticeDays  int      // days until reported missing
 	HeatMissing float64  // heat when reported (negative: the world is relieved)
 	Weight      int      // sidewalk traffic weight
-	Lures       []string // fixtures that pull this archetype to the porch
+	Traits      []string // what they are, which is what lures appeal to (see Traits)
 	Pair        bool     // arrives in twos
 	Group       int      // arrives as a party of this many (0/1 = alone)
 	Night       bool     // only out after dark
@@ -27,71 +27,86 @@ type Victim struct {
 }
 
 var Victims = []Victim{
-	{ID: "solar", Name: "Door-to-Door Solar Salesman", Glyph: 's', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 14, HeatMissing: 5, Weight: 12,
-		Lures: []string{"lure_openhouse"}, Drives: true, Loot: 20,
+	{ID: "solar", Name: "Door-to-Door Solar Salesman", Glyph: 's', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 14, HeatMissing: 5, Weight: 12, Traits: []string{"nosy"},
+		Drives: true, Loot: 20,
 		Flavor: "Nobody has ever missed one. His company thinks he quit. His mother thinks he's in Tucson."},
-	{ID: "mlm", Name: "MLM Hun", Glyph: 'm', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 10, HeatMissing: 6, Weight: 10,
-		Lures: []string{"lure_garage_sale", "lure_wifi"}, Loot: 15,
+	{ID: "mlm", Name: "MLM Hun", Glyph: 'm', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 10, HeatMissing: 6, Weight: 10, Traits: []string{"online", "bargain"},
+		Loot:   15,
 		Flavor: "Hey hun!! Quick question, would you like to join my downline? No. Would you like to join my dinner?"},
-	{ID: "techbro", Name: "Tech Bro", Glyph: 't', Color: "victim_prime", Marbling: 5, Fight: 2, NoticeDays: 5, HeatMissing: 15, Weight: 8,
-		Lures: []string{"lure_wifi", "lure_airbnb"}, Drives: true, Loot: 80,
+	{ID: "techbro", Name: "Tech Bro", Glyph: 't', Color: "victim_prime", Marbling: 5, Fight: 2, NoticeDays: 5, HeatMissing: 15, Weight: 8, Traits: []string{"online", "freebie"},
+		Drives: true, Loot: 80,
 		Flavor: "Keto, intermittent fasting, grass-fed everything. Beautifully marbled. Insufferable, even now."},
-	{ID: "vegan", Name: "Militant Vegan", Glyph: 'v', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 6, HeatMissing: 10, Weight: 8,
-		Lures: []string{"lure_garage_sale", "garden"}, Loot: 10,
+	{ID: "vegan", Name: "Militant Vegan", Glyph: 'v', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 6, HeatMissing: 10, Weight: 8, Traits: []string{"bargain", "wellness"},
+		Loot:   10,
 		Flavor: "Grass-fed, free-range, no antibiotics. Premium. The irony is the seasoning."},
-	{ID: "crossfit", Name: "CrossFit Guy", Glyph: 'c', Color: "victim_hard", Marbling: 1, Fight: 5, NoticeDays: 3, HeatMissing: 12, Weight: 7,
-		Lures: []string{"lure_couch"}, Loot: 12,
+	{ID: "crossfit", Name: "CrossFit Guy", Glyph: 'c', Color: "victim_hard", Marbling: 1, Fight: 5, NoticeDays: 3, HeatMissing: 12, Weight: 7, Traits: []string{"freebie", "wellness"},
+		Loot:   12,
 		Flavor: "Lean. Fights back. Will tell you about his WOD from inside the cell."},
-	{ID: "jogger", Name: "3 A.M. Jogger", Glyph: 'j', Color: "victim_hard", Marbling: 2, Fight: 3, NoticeDays: 4, HeatMissing: 10, Weight: 9, Night: true,
-		Lures: []string{"telescope"}, Loot: 0,
+	{ID: "jogger", Name: "3 A.M. Jogger", Glyph: 'j', Color: "victim_hard", Marbling: 2, Fight: 3, NoticeDays: 4, HeatMissing: 10, Weight: 9, Traits: []string{"wellness"}, Night: true,
+		Loot:   0,
 		Flavor: "Reflective vest, headphones in, zero situational awareness."},
-	{ID: "delivery", Name: "Package Delivery Driver", Glyph: 'd', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 3, HeatMissing: 14, Weight: 8,
-		Lures: []string{"lure_airbnb", "lure_openhouse"}, Drives: true, Loot: 8,
+	{ID: "delivery", Name: "Package Delivery Driver", Glyph: 'd', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 3, HeatMissing: 14, Weight: 8, Traits: []string{"traveler"},
+		Drives: true, Loot: 8,
 		Flavor: "Fast, tired, on a schedule. The packages will keep coming. The packages will pile up."},
-	{ID: "missionary", Name: "Missionary", Glyph: 'M', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 9, HeatMissing: 12, Weight: 6, Pair: true,
-		Lures: []string{"lure_couch"}, Loot: 5,
+	{ID: "missionary", Name: "Missionary", Glyph: 'M', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 9, HeatMissing: 12, Weight: 6, Traits: []string{"nosy", "freebie"}, Pair: true,
+		Loot:   5,
 		Flavor: "They travel in pairs. Two for one. They knocked. You answered. Everyone's day changed."},
-	{ID: "influencer", Name: "Lifestyle Influencer", Glyph: 'i', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 7, HeatMissing: 22, Weight: 6,
-		Lures: []string{"lure_airbnb", "pool"}, Drives: true, Loot: 45,
+	{ID: "influencer", Name: "Lifestyle Influencer", Glyph: 'i', Color: "victim_mid", Marbling: 3, Fight: 1, NoticeDays: 7, HeatMissing: 22, Weight: 6, Traits: []string{"wellness", "traveler"},
+		Drives: true, Loot: 45,
 		Flavor: "Her followers assumed a digital detox. On day seven they assumed the worst and were correct."},
-	{ID: "karen", Name: "Wants To Speak To The Manager", Glyph: 'K', Color: "victim_hard", Marbling: 3, Fight: 3, NoticeDays: 5, HeatMissing: 12, Weight: 7,
-		Lures: []string{"lure_garage_sale", "lure_openhouse"}, Drives: true, Loot: 35,
+	{ID: "karen", Name: "Wants To Speak To The Manager", Glyph: 'K', Color: "victim_hard", Marbling: 3, Fight: 3, NoticeDays: 5, HeatMissing: 12, Weight: 7, Traits: []string{"bargain", "nosy"},
+		Drives: true, Loot: 35,
 		Flavor: "You are the manager. You are also the butcher. She had notes on both."},
-	{ID: "landlord", Name: "Landlord", Glyph: 'L', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 20, HeatMissing: 3, Weight: 5,
-		Lures: []string{"lure_airbnb"}, Drives: true, Loot: 90,
+	{ID: "landlord", Name: "Landlord", Glyph: 'L', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 20, HeatMissing: 3, Weight: 5, Traits: []string{"traveler", "bargain"},
+		Drives: true, Loot: 90,
 		Flavor: "His tenants threw a party. Nobody has checked on him and nobody will."},
-	{ID: "crypto", Name: "Crypto Evangelist", Glyph: '$', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 8, HeatMissing: 8, Weight: 6,
-		Lures: []string{"lure_wifi"}, Loot: 120,
+	{ID: "crypto", Name: "Crypto Evangelist", Glyph: '$', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 8, HeatMissing: 8, Weight: 6, Traits: []string{"online", "freebie"},
+		Loot:   120,
 		Flavor: "All that steakhouse networking. Marbled like a portfolio, and the portfolio was also fake."},
-	{ID: "hoa", Name: "HOA Inspector", Glyph: 'H', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 2, HeatMissing: 20, Weight: 4, Drives: true,
+	{ID: "hoa", Name: "HOA Inspector", Glyph: 'H', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 2, HeatMissing: 20, Weight: 4, Traits: []string{"nosy"}, Drives: true,
 		Flavor: "Cited your mailbox. Cited your hedge. Did not cite the basement, because he never got that far."},
-	{ID: "podcaster", Name: "True Crime Podcaster", Glyph: 'P', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 4, HeatMissing: -20, Weight: 3,
+	{ID: "podcaster", Name: "True Crime Podcaster", Glyph: 'P', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 4, HeatMissing: -20, Weight: 3, Traits: []string{"nosy"},
 		Flavor: "Came to the street chasing a story. The final episode was mysteriously never recorded. Downloads went way up."},
-	{ID: "cop", Name: "Retired Cop", Glyph: 'R', Color: "victim_hard", Marbling: 3, Fight: 4, NoticeDays: 2, HeatMissing: 25, Weight: 4, Drives: true, Loot: 10,
+	{ID: "cop", Name: "Retired Cop", Glyph: 'R', Color: "victim_hard", Marbling: 3, Fight: 4, NoticeDays: 2, HeatMissing: 25, Weight: 4, Traits: []string{"nosy"}, Drives: true, Loot: 10,
 		Flavor: "Still has the mustache. Still has the flashlight. Does not, it turns out, still have the reflexes."},
-	{ID: "yoga", Name: "Yoga Instructor", Glyph: 'y', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 6, HeatMissing: 10, Weight: 6, Loot: 15,
-		Lures:  []string{"pool", "lure_openhouse"},
+	{ID: "yoga", Name: "Yoga Instructor", Glyph: 'y', Color: "victim_prime", Marbling: 4, Fight: 2, NoticeDays: 6, HeatMissing: 10, Weight: 6, Traits: []string{"wellness"}, Loot: 15,
 		Flavor: "Flexible. Hydrated. Says 'namaste' to the trapdoor on the way down."},
-	{ID: "tourist", Name: "Lost Tourist", Glyph: 'T', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 30, HeatMissing: 2, Weight: 5, Loot: 60,
-		Lures:  []string{"lure_airbnb", "lure_wifi"},
+	{ID: "tourist", Name: "Lost Tourist", Glyph: 'T', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 30, HeatMissing: 2, Weight: 5, Traits: []string{"traveler", "online"}, Loot: 60,
 		Flavor: "Asked for directions to the beach. There is no beach. There is now a tourist."},
-	{ID: "bachelorette", Name: "Bachelorette Party", Glyph: 'B', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 2, HeatMissing: 18, Weight: 3, Group: 3, Night: true, Loot: 25,
-		Lures:  []string{"lure_airbnb", "pool"},
+	{ID: "bachelorette", Name: "Bachelorette Party", Glyph: 'B', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 2, HeatMissing: 18, Weight: 3, Traits: []string{"wellness", "traveler"}, Group: 3, Night: true, Loot: 25,
 		Flavor: "Sashes, tiaras, a novelty straw. Three of them, if there's room. Nobody remembers which house."},
-	{ID: "ubereats", Name: "Uber Eats Driver", Glyph: 'u', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 3, HeatMissing: 12, Weight: 7, Drives: true, Loot: 22,
-		Lures:  []string{"lure_wifi"},
+	{ID: "ubereats", Name: "Uber Eats Driver", Glyph: 'u', Color: "victim_mid", Marbling: 3, Fight: 2, NoticeDays: 3, HeatMissing: 12, Weight: 7, Traits: []string{"online", "freebie"}, Drives: true, Loot: 22,
 		Flavor: "Your order arrived. So did he. The app says 'delivered' and the app is right."},
-	{ID: "canvasser", Name: "Election Canvasser", Glyph: 'e', Color: "victim_easy", Marbling: 2, Fight: 1, NoticeDays: 12, HeatMissing: 4, Weight: 6, Loot: 3,
-		Lures:  []string{"lure_openhouse"},
+	{ID: "canvasser", Name: "Election Canvasser", Glyph: 'e', Color: "victim_easy", Marbling: 2, Fight: 1, NoticeDays: 12, HeatMissing: 4, Weight: 6, Traits: []string{"nosy"}, Loot: 3,
 		Flavor: "Do you have a minute to talk about the ballot? You have all the minutes now."},
-	{ID: "cookiedad", Name: "Cookie Dad", Glyph: 'k', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 5, HeatMissing: 15, Weight: 5, Loot: 40,
-		Lures:  []string{"lure_garage_sale"},
+	{ID: "cookiedad", Name: "Cookie Dad", Glyph: 'k', Color: "victim_prime", Marbling: 4, Fight: 1, NoticeDays: 5, HeatMissing: 15, Weight: 5, Traits: []string{"bargain"}, Loot: 40,
 		Flavor: "Selling his kid's cookies door to door. Ate most of the samples himself. It shows, beautifully."},
-	{ID: "lifecoach", Name: "Life Coach", Glyph: 'l', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 8, HeatMissing: 6, Weight: 6, Loot: 25,
-		Lures:  []string{"lure_wifi", "lure_couch"},
+	{ID: "lifecoach", Name: "Life Coach", Glyph: 'l', Color: "victim_easy", Marbling: 3, Fight: 1, NoticeDays: 8, HeatMissing: 6, Weight: 6, Traits: []string{"online", "wellness"}, Loot: 25,
 		Flavor: "Wants to unlock your potential. You unlocked the basement instead."},
-	{ID: "gladys", Name: "Gladys From Next Door", Glyph: 'G', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 1, HeatMissing: 30, Weight: 2, Loot: 12,
+	{ID: "gladys", Name: "Gladys From Next Door", Glyph: 'G', Color: "victim_heat", Marbling: 2, Fight: 2, NoticeDays: 1, HeatMissing: 30, Weight: 2, Traits: []string{"nosy"}, Loot: 12,
 		Flavor: "The bundt cake, the questions, the labradoodle. Tempting. Very, very tempting."},
+}
+
+// Traits are what a mark is, in the words a lure's description uses.
+var Traits = map[string]string{
+	"bargain":  "bargain hunters",
+	"freebie":  "freeloaders",
+	"online":   "the terminally online",
+	"nosy":     "the nosy",
+	"traveler": "out-of-towners",
+	"wellness": "wellness types",
+}
+
+// Appeals reports whether a lure draws this archetype.
+func (f *Fixture) Appeals(v *Victim) bool {
+	for _, d := range f.Draws {
+		for _, t := range v.Traits {
+			if d == t {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 var victimByID = func() map[string]*Victim {
@@ -154,6 +169,7 @@ type Fixture struct {
 	Noise    float64  // heat per use (disposal) or per hour (passive noise)
 	Draw     float64  // utilities, $/hour
 	Accepts  []string // disposal: evidence kinds it takes
+	Draws    []string // lure: traits it appeals to
 	Desc     string
 }
 
@@ -163,15 +179,15 @@ var Fixtures = []Fixture{
 		Desc: "Says WELCOME. Underneath: a trapdoor and a laundry chute to the basement."},
 	{ID: "trapdoor_pro", Name: "Hydraulic Trapdoor", Level: Ground, Front: true, Cost: 320, Prereq: "welcome_mat", Glyph: '_', Color: "fix_lure", Kind: KindTrap,
 		Desc: "Faster, quieter, wider. Even the CrossFit guy goes down. Replaces the mat in the same spot."},
-	{ID: "lure_couch", Name: "FREE COUCH", Level: Ground, Front: true, Cost: 30, Glyph: 'c', Color: "fix_lure", Kind: KindLure,
+	{ID: "lure_couch", Name: "FREE COUCH", Level: Ground, Front: true, Cost: 30, Glyph: 'c', Color: "fix_lure", Kind: KindLure, Draws: []string{"freebie"},
 		Desc: "Curb-side. Somebody always stops to look."},
-	{ID: "lure_wifi", Name: "Free Wi-Fi Sign", Level: Ground, Front: true, Cost: 60, Glyph: 'w', Color: "fix_lure", Kind: KindLure,
+	{ID: "lure_wifi", Name: "Free Wi-Fi Sign", Level: Ground, Front: true, Cost: 60, Glyph: 'w', Color: "fix_lure", Kind: KindLure, Draws: []string{"online", "freebie"},
 		Desc: "Password: password. Tech bros and huns."},
-	{ID: "lure_garage_sale", Name: "Garage Sale Sign", Level: Ground, Front: true, Cost: 50, Glyph: '$', Color: "fix_lure", Kind: KindLure,
+	{ID: "lure_garage_sale", Name: "Garage Sale Sign", Level: Ground, Front: true, Cost: 50, Glyph: '$', Color: "fix_lure", Kind: KindLure, Draws: []string{"bargain"},
 		Desc: "Everything must go. Especially the customers."},
-	{ID: "lure_openhouse", Name: "OPEN HOUSE Sign", Level: Ground, Front: true, Cost: 80, Glyph: 'O', Color: "fix_lure", Kind: KindLure,
+	{ID: "lure_openhouse", Name: "OPEN HOUSE Sign", Level: Ground, Front: true, Cost: 80, Glyph: 'O', Color: "fix_lure", Kind: KindLure, Draws: []string{"nosy"},
 		Desc: "Balloons on the mailbox. Salesmen and Karens roll right in."},
-	{ID: "lure_airbnb", Name: "Airbnb Listing", Level: Ground, Front: true, Cost: 200, Glyph: 'A', Color: "fix_lure", Kind: KindLure,
+	{ID: "lure_airbnb", Name: "Airbnb Listing", Level: Ground, Front: true, Cost: 200, Glyph: 'A', Color: "fix_lure", Kind: KindLure, Draws: []string{"traveler"},
 		Desc: "Guests check in. Five stars, would eat again. Pays $15 a day too."},
 	{ID: "doorbell_cam", Name: "Doorbell Camera", Level: Ground, Front: true, Cost: 90, Glyph: 'o', Color: "fix_lure", Kind: KindPassive, Draw: 0.02,
 		Desc: "Inspectors take longer to work up the nerve. Passers-by look suspicious in 4K."},
@@ -273,7 +289,7 @@ var Fixtures = []Fixture{
 		Desc: "Ceramic. Unlocks Cul-de-Sac Ribs."},
 	{ID: "shed", Name: "Tool Shed", Level: Backyard, Cost: 140, Glyph: 'D', Color: "fix_yard", Kind: KindPassive,
 		Desc: "Better shovels: burying takes half the time and makes no noise."},
-	{ID: "pool", Name: "Pool", Level: Backyard, Cost: 400, Prereq: "fence", Glyph: '~', Color: "fix_cold", Kind: KindLure, Draw: 0.06,
+	{ID: "pool", Name: "Pool", Level: Backyard, Cost: 400, Prereq: "fence", Glyph: '~', Color: "fix_cold", Kind: KindLure, Draws: []string{"wellness"}, Draw: 0.06,
 		Desc: "Pool party. Influencers arrive uninvited."},
 	{ID: "gnome", Name: "Garden Gnome", Level: Backyard, Cost: 25, Glyph: 'g', Color: "fix_yard", Kind: KindPassive,
 		Desc: "He's seen things. Slightly lucky."},
