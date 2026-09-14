@@ -506,8 +506,11 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 			return false
 		}
 		w.Cash -= 4
+		w.SpentFeed += 4
+		w.FedCount++
 		l.Hunger = 0
 		l.Starve = 0
+		w.say("cash", "%s fed %s: $4 of gruel.", wk.Name, l.Name)
 		return true
 	case "take_output":
 		m := w.machine(j.Machine)

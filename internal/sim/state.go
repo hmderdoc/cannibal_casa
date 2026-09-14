@@ -260,6 +260,11 @@ type World struct {
 
 	LastRaid map[string]int64 `json:"last_raid,omitempty"` // target key -> unix day of the last raid
 
+	// Running totals since the last morning report, so small drains get a line.
+	SpentFeed float64 `json:"spent_feed"`
+	SpentUtil float64 `json:"spent_util"`
+	FedCount  int     `json:"fed_count"`
+
 	Alive     bool       `json:"alive"`
 	Cause     string     `json:"cause,omitempty"`
 	Ancestors []Ancestor `json:"ancestors"`

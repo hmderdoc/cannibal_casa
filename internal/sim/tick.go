@@ -305,6 +305,8 @@ func (w *World) tickLivestock() {
 		l.Hunger = clampF(l.Hunger+100.0/(2*day), 0, 100)
 		if l.Cell != "" && w.Has("gruel") && l.Hunger > 50 && w.Cash >= 2 {
 			w.Cash -= 2
+			w.SpentFeed += 2
+			w.FedCount++
 			l.Hunger = 0
 		}
 		if l.Hunger < 50 && l.Marbling < 5 {
@@ -666,6 +668,7 @@ func (w *World) hourly() {
 		}
 	}
 	w.Cash -= draw
+	w.SpentUtil += draw
 	if w.Cash < 0 {
 		w.Cash = 0
 	}
@@ -833,6 +836,10 @@ func (w *World) daily() {
 		}
 	}
 	w.say("info", "Day %d. %s", w.Day(), morningLines[w.rng().Intn(len(morningLines))])
+	if w.SpentFeed > 0 || w.SpentUtil >= 0.5 {
+		w.say("cash", "Yesterday's bills: $%.0f of gruel (%d feeding%s), $%.0f of power. -$%.0f.", w.SpentFeed, w.FedCount, plural(w.FedCount), w.SpentUtil, w.SpentFeed+w.SpentUtil)
+	}
+	w.SpentFeed, w.SpentUtil, w.FedCount = 0, 0, 0
 }
 
 var morningLines = []string{
