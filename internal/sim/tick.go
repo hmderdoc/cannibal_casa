@@ -673,7 +673,7 @@ func (w *World) hourly() {
 		w.Cash = 0
 	}
 
-	// Spoilage.
+	// Spoilage: name what went off and where.
 	var keep []Item
 	spoiled := 0
 	for _, c := range w.Fridge {
@@ -683,6 +683,7 @@ func (w *World) hourly() {
 		}
 		if !c.Frozen && w.Clock-c.Born > int64(life) {
 			spoiled++
+			w.say("bad", "A %s cut of %s spoiled in the fridge. Into the trash.", c.Sub, strings.ToLower(VictimByID(c.Victim).Name))
 			continue
 		}
 		keep = append(keep, c)
@@ -692,6 +693,7 @@ func (w *World) hourly() {
 	for _, d := range w.Pantry {
 		if w.Clock-d.Born > int64(RecipeByID(d.Sub).ShelfMin) && d.Born > 0 {
 			spoiled++
+			w.say("bad", "%s went stale on the shelf. Into the trash.", RecipeByID(d.Sub).Name)
 			continue
 		}
 		keep = append(keep, d)
@@ -699,7 +701,9 @@ func (w *World) hourly() {
 	w.Pantry = keep
 	if spoiled > 0 {
 		w.Heat = clampF(w.Heat+0.3*float64(spoiled), 0, 120)
-		w.say("bad", "%d thing%s went off. The trash smells like a crime.", spoiled, plural(spoiled))
+		if spoiled >= 3 {
+			w.say("heat", "The trash smells like a crime.")
+		}
 	}
 	for i := range w.Pantry {
 		if w.Pantry[i].Born == 0 {
