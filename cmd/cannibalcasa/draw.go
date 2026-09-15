@@ -350,7 +350,8 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	b.Fill(x, y, iw, 1, ' ', ui.White, lineBg)
 	x2 := statBg(b, x, y, "Evidence", fmt.Sprint(pile), pick(pile == 0, ui.Col("good"), pick(pile < 4, ui.Col("warn"), ui.Col("bad"))), lineBg)
 	x2 = statBg(b, x2+1, y, "Cars", fmt.Sprint(cars), pick(cars == 0, ui.Col("good"), ui.Col("bad")), lineBg)
-	statBg(b, x2+1, y, "Buried", fmt.Sprintf("%d/%d", s.Buried, s.PlotCap()), pick(s.Buried >= s.PlotCap() && s.PlotCap() > 0, ui.Col("warn"), ui.Col("text")), lineBg)
+	x2 = b.Print(x2+1, y, "Buried ", ui.Brown, lineBg)
+	b.Print(x2, y, fmt.Sprintf("%d/%d", s.Buried, s.PlotCap()), pick(s.Buried >= s.PlotCap() && s.PlotCap() > 0, ui.Col("warn"), ui.Wood), lineBg)
 	b.Set(ox+w-1, y, '│', ui.Col("border2"), ui.Black)
 	y++
 	divider(b, ox, y, w)
