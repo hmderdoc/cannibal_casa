@@ -496,33 +496,37 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 	}
 	lines = append(lines, a.notes...)
 	sort.SliceStable(lines, func(i, j int) bool { return lines[i].Tick < lines[j].Tick })
-	// Newest entry first, right under the map, so the eye lands on what just
-	// happened. A wrapped entry keeps its own lines in reading order.
-	var rows []sim.Line
-	for i := len(lines) - 1; i >= 0 && len(rows) < h-2; i-- {
+	// Build each entry as its own block of wrapped lines (a stamp on the first
+	// line), newest entry first; then order the entries, never the lines.
+	var entries [][]sim.Line
+	total := 0
+	for i := len(lines) - 1; i >= 0 && total < h-2; i-- {
 		stamp := fmt.Sprintf("d%d %02d:%02d ", lines[i].Tick/1440+1, lines[i].Tick%1440/60, lines[i].Tick%60)
 		ws := wrap(lines[i].Text, w-4-len(stamp))
-		for j := 0; j < len(ws) && len(rows) < h-2; j++ {
+		var block []sim.Line
+		for j := 0; j < len(ws) && total < h-2; j++ {
 			pre := strings.Repeat(" ", len(stamp))
 			if j == 0 {
 				pre = stamp
 			}
-			rows = append(rows, sim.Line{Kind: lines[i].Kind, Text: pre + ws[j]})
+			block = append(block, sim.Line{Kind: lines[i].Kind, Text: pre + ws[j]})
+			total++
 		}
+		entries = append(entries, block)
 	}
-	// Reading order: reverse the block so the newest sits at the bottom. Its
-	// stamped line (the first line of the first entry) lands at lastStamped.
 	newestFirst := a.w == nil || a.w.JournalOrder != "oldest"
+	var rows []sim.Line
 	lastStamped := -1
-	if !newestFirst {
-		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
-			rows[i], rows[j] = rows[j], rows[i]
+	if newestFirst {
+		for _, e := range entries {
+			rows = append(rows, e...)
 		}
-		for i := len(rows) - 1; i >= 0; i-- {
-			if strings.HasPrefix(rows[i].Text, "d") && strings.Contains(rows[i].Text, ":") {
-				lastStamped = i
-				break
+	} else {
+		for i := len(entries) - 1; i >= 0; i-- {
+			if i == 0 {
+				lastStamped = len(rows) // the newest entry's first line
 			}
+			rows = append(rows, entries[i]...)
 		}
 	}
 	y := oy + 1
