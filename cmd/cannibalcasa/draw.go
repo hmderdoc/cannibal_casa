@@ -338,7 +338,7 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	if heat > 100 {
 		heat = 100
 	}
-	b.Print(x, y, "Heat", ui.Col("label"), ui.Black)
+	fireLabel(b, x, y, "Heat", heat)
 	b.Bar(x+7, y, barW, int(heat), 100, tierColor(heat), ui.Col("bar_off"), ui.Black)
 	b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", heat), tierColor(heat), ui.Black)
 	y++
@@ -359,7 +359,7 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	p := s.Player()
 	// Hunger, and what feeds you.
 	if p != nil {
-		b.Print(x, y, "Hunger", ui.Col("label"), ui.Black)
+		b.Print(x, y, "Hunger", pick(p.Hunger > 50, ui.BrightGreen, ui.Green), ui.Black)
 		b.Bar(x+7, y, barW, int(p.Hunger), 100, needColor(p.Hunger), ui.Col("bar_off"), ui.Black)
 		b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", p.Hunger), needColor(p.Hunger), ui.Black)
 		y++
@@ -385,12 +385,13 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 
 	// Energy, and what pays.
 	if p != nil {
-		b.Print(x, y, "Energy", ui.Col("label"), ui.Black)
-		b.Bar(x+7, y, barW, int(p.Energy), 100, needColor(p.Energy), ui.Col("bar_off"), ui.Black)
-		b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", p.Energy), needColor(p.Energy), ui.Black)
+		b.Print(x, y, "Energy", ui.BrightBlue, ui.Black)
+		b.Bar(x+7, y, barW, int(p.Energy), 100, pick(p.Energy > 25, ui.Yellow, ui.Col("heat_hi")), ui.Col("bar_off"), ui.Black)
+		b.Print(x+8+barW, y, fmt.Sprintf("%3.0f", p.Energy), pick(p.Energy > 25, ui.Yellow, ui.Col("heat_hi")), ui.Black)
 		y++
 	}
-	x2 = stat(b, x, y, "Cash", fmt.Sprintf("$%.0f", s.Cash), ui.Col("cash"))
+	x2 = b.Print(x, y, "Cash ", ui.Green, ui.Black)
+	x2 = b.Print(x2, y, fmt.Sprintf("$%.0f", s.Cash), ui.BrightGreen, ui.Black)
 	x2 = stat(b, x2+1, y, "Curb", fmt.Sprintf("%d/%d", len(s.Stand), s.StandCap()), ui.Col("cash"))
 	if s.BoothCap() > 0 {
 		stat(b, x2+1, y, "Mall", fmt.Sprintf("%d/%d", len(s.Booth), s.BoothCap()), ui.Col("cash"))
@@ -473,6 +474,20 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 			bg = ui.Col("calm_bg")
 		}
 		b.PrintN(x, oy+h-2, " "+alert, iw, ui.Col("strip_fg"), bg)
+	}
+}
+
+// fireLabel colors each letter of the Heat label along a fire ramp that
+// climbs with the value: embers at nothing, white-hot near the raid.
+func fireLabel(b *ui.Buffer, x, y int, label string, heat float64) {
+	ramp := []ui.Attr{ui.Brown, ui.Red, ui.BrightRed, ui.Orange, ui.Yellow, ui.BrightWhite}
+	base := int(heat / 25) // 0..4
+	for i, ch := range label {
+		idx := base + i/2
+		if idx >= len(ramp) {
+			idx = len(ramp) - 1
+		}
+		b.Set(x+i, y, ch, ramp[idx], ui.Black)
 	}
 }
 
