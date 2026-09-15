@@ -674,13 +674,15 @@ func (w *World) resolveInspection(v *Visitor) {
 				break
 			}
 		}
+		before := w.Heat
 		w.Heat = clampF(w.Heat-drop, 0, 120)
-		w.say("good", "Visit from %s. They saw a lovely home. Heat -%.0f.", v.Name, drop)
+		w.say("good", "Visit from %s. They saw a lovely home. Heat %.0f -> %.0f.", v.Name, before, w.Heat)
 		return
 	}
 	rise := 8.0 + 2*float64(v.Tier)
+	before := w.Heat
 	w.Heat = clampF(w.Heat+rise, 0, 120)
-	w.say("bad", "Visit from %s. They saw too much (%d vs %d allowed). Heat +%.0f.", v.Name, visible, limit, rise)
+	w.say("bad", "Visit from %s. They saw too much (%d vs %d allowed). Heat %.0f -> %.0f.", v.Name, visible, limit, before, w.Heat)
 	w.post("heat", "had visitors. They left quickly and made a phone call in the driveway.")
 	if v.Tier >= 4 && len(w.Livestock) > 0 && w.rng().Intn(100) < 30 {
 		l := w.Livestock[0]
@@ -824,11 +826,12 @@ func (w *World) hourly() {
 		if w.Clock >= m.Due {
 			v := VictimByID(m.Victim)
 			w.Heat = clampF(w.Heat+v.HeatMissing, 0, 120)
+			before := clampF(w.Heat-v.HeatMissing, 0, 120)
 			if v.HeatMissing < 0 {
-				w.say("good", "A %s was reported missing. Nobody seems upset. Heat %.0f.", strings.ToLower(v.Name), v.HeatMissing)
+				w.say("good", "A %s was reported missing. Nobody seems upset. Heat %.0f -> %.0f.", strings.ToLower(v.Name), before, w.Heat)
 				w.post("info", "'s street: a %s has vanished. The comment section is celebrating.", strings.ToLower(v.Name))
 			} else {
-				w.say("heat", "A %s was reported missing. Heat +%.0f.", strings.ToLower(v.Name), v.HeatMissing)
+				w.say("heat", "A %s was reported missing. Heat %.0f -> %.0f.", strings.ToLower(v.Name), before, w.Heat)
 				w.post("heat", "'s street: MISSING - %s, last seen near a house with a very nice hedge.", v.Name)
 			}
 			continue
