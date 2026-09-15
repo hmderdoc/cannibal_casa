@@ -555,8 +555,8 @@ func (a *app) drawTicker(ox, oy, w, h int) {
 func (a *app) drawFooter(y int) {
 	b := a.buf
 	keys := []struct{ k, v string }{
-		{"Spc", "pause"}, {"Tab", "floor"}, {"B", "build"}, {"G", "out"}, {"P", "policy"},
-		{"L", "roster"}, {"I", "stock"}, {"N", "street"}, {"?", "guide"},
+		{"Spc", "pause"}, {"1-4", "speed"}, {"B", "build"}, {"G", "out"}, {"P", "policy"},
+		{"L", "roster"}, {"I", "stock"}, {"N", "hood"}, {"?", "help"},
 	}
 	bg := ui.Col("strip_bg")
 	b.Fill(0, y, b.W, 1, ' ', ui.White, bg)

@@ -63,7 +63,7 @@ var guide = []section{
 		{Kind: "warn", Text: "Your own house can be raided the same way. Cameras, a fence and a Guard are the answer."},
 	}},
 	{"Keys", []sim.Line{
-		{Kind: "dim", Text: "Arrows / WASD: cursor.  Enter: look at / open whatever is under it.  Tab: next floor.  Space: pause.  1 2 3: speed."},
+		{Kind: "dim", Text: "Arrows / WASD: cursor.  Enter: look at / open whatever is under it.  Tab: next floor.  Space: pause.  1 2 3 4: speed 1x 2x 4x 8x."},
 		{Kind: "dim", Text: "B build (then place with the cursor).  G go out.  P policy.  L roster and roles.  I inventory.  N the street.  J journal order.  O options.  ? this guide.  Q quit."},
 		{Kind: "dim", Text: "On a machine, Enter offers a switch, upgrades, and Move it. Moving is free and instant; workers re-path."},
 	}},

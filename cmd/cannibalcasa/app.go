@@ -157,8 +157,10 @@ func (a *app) handleKey(k key) {
 		a.speed = 1
 	case '2':
 		a.speed = 2
-	case '3', '4':
+	case '3':
 		a.speed = 4
+	case '4':
+		a.speed = 8
 	case 'b', 'B':
 		a.openBuild("")
 	case 'g', 'G':
