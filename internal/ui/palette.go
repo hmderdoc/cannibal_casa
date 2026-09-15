@@ -106,10 +106,12 @@ var Palette = map[string]Attr{
 	"title":    BrightRed,
 	"text":     BrightWhite, // content
 	"bright":   BrightWhite,
-	"dim":      Gray,        // hints and labels only
-	"flavor":   Lavender,    // the joke line
-	"rule":     Gold,        // placement rule, footers of menus
-	"strip_bg": Attr{4, 17}, // title and status strips
+	"dim":      Gray,     // hints and labels only
+	"flavor":   Lavender, // the joke line
+	"rule":     Gold,     // placement rule, footers of menus
+	"strip_bg": Attr{4, 17},
+	"tag_bg":   Attr{6, 37}, // small tags on frame edges: time, name
+	"tag_fg":   Black,       // title and status strips
 	"strip_fg": BrightWhite,
 	"alert_bg": Attr{1, 88},
 	// modals: their own world, not the map's

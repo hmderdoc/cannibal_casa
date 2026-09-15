@@ -309,20 +309,28 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	if sx < ox+1 {
 		sx = ox + 1
 	}
-	b.Fill(sx, oy, ox+w-1-sx, 1, ' ', ui.Col("strip_fg"), ui.Col("strip_bg"))
-	xx := b.Print(sx, oy, strip, ui.Col("strip_fg"), ui.Col("strip_bg"))
-	b.Print(xx, oy, speed+" ", speedCol, ui.Col("strip_bg"))
+	b.Fill(sx, oy, ox+w-1-sx, 1, ' ', ui.Col("tag_fg"), ui.Col("tag_bg"))
+	xx := b.Print(sx, oy, strip, ui.Col("tag_fg"), ui.Col("tag_bg"))
+	if a.speed == 0 {
+		speedCol = ui.Col("bad")
+	} else {
+		speedCol = ui.Col("tag_fg")
+	}
+	b.Print(xx, oy, speed+" ", speedCol, ui.Col("tag_bg"))
 
-	// Name and stars.
-	y := oy + 1
+	// Bottom edge, right-aligned: who you are and how you're doing.
 	name := s.Cannibal
 	if !s.Alive {
 		name += " (deceased)"
 	}
-	stars := fmt.Sprintf("%d stars", s.Stars)
-	b.PrintN(x, y, trunc(name, iw-len(stars)-1), iw-len(stars)-1, ui.Col("bright"), ui.Black)
-	b.Print(x+iw-len(stars), y, stars, ui.Col("stars"), ui.Black)
-	y++
+	tag := fmt.Sprintf(" %s  %d stars ", trunc(name, iw-12), s.Stars)
+	tx := ox + w - 2 - len([]rune(tag))
+	if tx < ox+1 {
+		tx = ox + 1
+	}
+	b.Print(tx, oy+h-1, tag, ui.Col("tag_fg"), ui.Col("tag_bg"))
+
+	y := oy + 1
 
 	barW := iw - 11
 	// Heat, and what feeds it.
@@ -415,6 +423,10 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 		limit--
 	}
 	workers := append([]*sim.Worker(nil), s.Workers...)
+	// Bottom-align the statuses: leave the gap above them, not below.
+	if avail := limit - y; len(workers) < avail {
+		y = limit - len(workers)
+	}
 	sort.SliceStable(workers, func(i, j int) bool {
 		a, b := workers[i], workers[j]
 		if (a.Kind == "cannibal") != (b.Kind == "cannibal") {
