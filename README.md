@@ -13,7 +13,7 @@ binary, no runtime dependencies.
 
 The house is a machine. Passers-by walk the sidewalk; a lure pulls one onto
 the porch and the welcome mat drops them into a free cell. Livestock eats and
-fattens. You and your Renfields butcher, carry cuts to the fridge, cook at the
+fattens. You and your slaves butcher, carry cuts to the fridge, cook at the
 stove, smoker or sous vide, plate to the shelf, eat, sleep, stock the curb
 stand, and haul the bags out back to the chipper, the compost, the lye tub or
 a flower bed. Heat reads the jams: bags on the step, cars at the curb, hungry
@@ -26,13 +26,13 @@ on your policy. Come back to full freezers or to sirens.
 You don't walk around. You move a cursor, look at things, build machines on
 any tile (and move them: workers walk, so layout is throughput), switch them
 on and off, and set policy: butcher at what marbling, keep how many meals on
-the shelf, which recipes go to the stand, whether The Chair turns guests into
+the shelf, which recipes go to the stand, whether The Chair turns captives into
 workers. Then you watch it run, in color, on a roguelike map.
 
 Money comes from the wallets of the people who drop through the mat, from
 the curb stand, and from going out: a shift at the mall, a market run,
 hunting, scavenging, or raiding another house on the street, CPU or player.
-Renfields take roles (hand, cook, guard, shill, gimp, clerk), and one that
+slaves take roles (hand, cook, guard, shill, gimp, clerk), and one that
 eats enough of what the house serves becomes a fellow cannibal who hunts on
 their own.
 
@@ -41,7 +41,7 @@ each costing more than the last, and late-game money goes into a walk-in
 freezer, an industrial chipper, a chef's kitchen, or upkeep like a landscaper,
 a lawyer and a PR firm that cool the street for as long as you pay them. The
 mall is a real place: Tab past the attic, buy a booth on the concourse, give
-a Renfield the clerk role, and grow it into a kiosk and then a storefront.
+a slave the clerk role, and grow it into a kiosk and then a storefront.
 Heat has levers: an intake policy (always, only when the fridge runs low,
 never), a block party, a check to the HOA, a bake sale, and every sale you
 make. Plots can be dug up, and old burials become flowers on their own.

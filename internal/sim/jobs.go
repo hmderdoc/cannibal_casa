@@ -249,7 +249,7 @@ func (w *World) jobButcher(wk *Worker) *Job {
 		work = work * 3 / 4
 	}
 	w.machine("block").ReservedBy = wk.ID
-	return &Job{Kind: "butcher", Label: "processing " + pick.Name, Target: pick.ID, Machine: "block",
+	return &Job{Kind: "butcher", Label: "butchering " + pick.Name, Target: pick.ID, Machine: "block",
 		Steps: []Step{w.stepTo(pick.Cell, 2, "take_livestock"), w.stepTo("block", work, "butcher"),
 			w.stepTo("fridge", 0, "drop_cuts"), w.stepTo("back_step", 0, "drop_bag")}}
 }
@@ -786,7 +786,7 @@ func (w *World) do(wk *Worker, j *Job, s Step) bool {
 		for _, k := range []string{"bones", "clothes", "phone"} {
 			wk.Carry = append(wk.Carry, Item{ID: w.newID(), Kind: "evidence", Sub: k, Victim: v.ID, Born: w.Clock})
 		}
-		w.say("info", "%s processed %s the %s. Hum something.", wk.Name, l.Name, v.Name)
+		w.say("info", "%s butchered %s the %s. Hum something.", wk.Name, l.Name, v.Name)
 		return true
 	case "drop_cuts":
 		var keep []Item

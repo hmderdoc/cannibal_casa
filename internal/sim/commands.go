@@ -478,7 +478,7 @@ func (w *World) Order(id int, order string) error {
 	}
 	l := w.livestockByID(id)
 	if l == nil || l.Cell == "" {
-		return errors.New("no such guest, or they're already being moved")
+		return errors.New("no such captive, or they're already being moved")
 	}
 	l.Order = order
 	switch order {
@@ -532,7 +532,7 @@ func (w *World) SetRole(id int, role string) error {
 			return nil
 		}
 	}
-	return errors.New("no such Renfield")
+	return errors.New("no such slave")
 }
 
 func (w *World) Rename(name string) error {

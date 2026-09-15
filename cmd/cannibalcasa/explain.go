@@ -17,7 +17,7 @@ var effects = map[string]string{
 	"knife_set":    "Cleaner, faster butchering: more prime cuts from every body.",
 	"dining_set":   "Neighbors come over in the evening and eat your best dish. Heat drops, stars rise.",
 	"curtains":     "Visitors see less of what's inside, and the street calms down faster.",
-	"big_tv":       "Keeps Renfields loyal.",
+	"big_tv":       "Keeps slaves loyal.",
 	"wine_rack":    "Unlocks the liver with fava beans, and makes dinner parties go better.",
 	"vhs":          "The Chair works much faster.",
 	"chemistry":    "Chloroform for the mat: the trap catches more of the people it fires on.",
@@ -31,7 +31,7 @@ var effects = map[string]string{
 	"cameras":      "Livestock can't slip out, and raiders get caught.",
 	"telescope":    "Better trapping after dark, and joggers take the bait.",
 	"soap_molds":   "Turns scraps into soap that sells itself online.",
-	"lure_airbnb":  "Guests also pay for the room.",
+	"lure_airbnb":  "Captives also pay for the room.",
 }
 
 func explain(w *sim.World, f *sim.Fixture) []sim.Line {
@@ -79,17 +79,17 @@ func explain(w *sim.World, f *sim.Fixture) []sim.Line {
 			out = append(out, sim.Line{Kind: "info", Text: "Where the bags pile up after butchering. Every bag here raises Heat until something takes it."})
 		}
 	case sim.KindCell:
-		out = append(out, sim.Line{Kind: "info", Text: "Holds one guest. The trap only fires when a cell is free, so more cells means more intake. Guests eat, fatten, and get loud if they're hungry."})
+		out = append(out, sim.Line{Kind: "info", Text: "Holds one captive. The trap only fires when a cell is free, so more cells means more intake. Captives eat, fatten, and get loud if they're hungry."})
 	case sim.KindBed:
 		if f.ID == "bed" {
 			out = append(out, sim.Line{Kind: "info", Text: "Where you sleep. Keep it near the work."})
 		} else {
-			out = append(out, sim.Line{Kind: "info", Text: "Each cot lets you keep one more Renfield."})
+			out = append(out, sim.Line{Kind: "info", Text: "Each cot lets you keep one more slave."})
 		}
 	case sim.KindChair:
-		out = append(out, sim.Line{Kind: "info", Text: "Brainwashing. Turns a guest into a Renfield who works for you. Needs a free cot."})
+		out = append(out, sim.Line{Kind: "info", Text: "Brainwashing. Turns a captive into a slave who works for you. Needs a free cot."})
 	case sim.KindBlock:
-		out = append(out, sim.Line{Kind: "info", Text: "Butchering. Guests become cuts for the fridge and bags for the back step."})
+		out = append(out, sim.Line{Kind: "info", Text: "Butchering. Captives become cuts for the fridge and bags for the back step."})
 	case sim.KindVan:
 		out = append(out, sim.Line{Kind: "info", Text: "Hauls away the cars your visitors leave at the curb, and helps on raids."})
 	case sim.KindBooth:

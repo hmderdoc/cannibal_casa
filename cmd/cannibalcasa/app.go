@@ -262,7 +262,7 @@ func (a *app) quickview() string {
 			who := "you"
 			switch wk.Kind {
 			case "renfield":
-				who = "Renfield " + strings.ToLower(sim.RoleName(wk.Role))
+				who = "slave " + strings.ToLower(sim.RoleName(wk.Role))
 			case "convert":
 				who = "fellow cannibal"
 			}
@@ -547,7 +547,7 @@ func describeWorker(a *app, wk *sim.Worker) []sim.Line {
 	kind := "The cannibal of the house."
 	switch wk.Kind {
 	case "renfield":
-		kind = fmt.Sprintf("A Renfield (%s), formerly a %s. Loyalty %.0f. %d of %d meals toward becoming one of the family.", strings.ToLower(sim.RoleName(wk.Role)), strings.ToLower(sim.VictimByID(wk.Victim).Name), wk.Loyalty, wk.Meals, sim.ConvertMeals)
+		kind = fmt.Sprintf("A slave (%s), formerly a %s. Loyalty %.0f. %d of %d meals toward becoming one of the family.", strings.ToLower(sim.RoleName(wk.Role)), strings.ToLower(sim.VictimByID(wk.Victim).Name), wk.Loyalty, wk.Meals, sim.ConvertMeals)
 	case "convert":
 		kind = fmt.Sprintf("A fellow cannibal (%s), formerly a %s. Loyal for life. Eats like family, hunts at night on their own.", strings.ToLower(sim.RoleName(wk.Role)), strings.ToLower(sim.VictimByID(wk.Victim).Name))
 	}

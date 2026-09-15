@@ -213,14 +213,14 @@ func TestDirectOrders(t *testing.T) {
 		}
 	}
 	if !renfield {
-		t.Fatalf("the ordered guest never became a Renfield: workers=%d livestock=%d chair=%+v", len(w.Workers), len(w.Livestock), w.Machines["chair"])
+		t.Fatalf("the ordered captive never became a slave: workers=%d livestock=%d chair=%+v", len(w.Workers), len(w.Livestock), w.Machines["chair"])
 	}
 	if err := w.Order(w.Livestock[0].ID, "butcher"); err != nil {
 		t.Fatal(err)
 	}
 	w.Advance(6 * 60)
 	if len(w.Livestock) != 0 {
-		t.Fatalf("the ordered guest was not butchered: %d left", len(w.Livestock))
+		t.Fatalf("the ordered captive was not butchered: %d left", len(w.Livestock))
 	}
 }
 
@@ -283,7 +283,7 @@ func TestRoleChangeDropsCarry(t *testing.T) {
 		w.Advance(1)
 	}
 	if l.Cell != "" {
-		t.Fatal("guest never picked up")
+		t.Fatal("captive never picked up")
 	}
 	w.SetRole(r.ID, RoleCook)
 	w.Advance(3 * 60)
@@ -299,7 +299,7 @@ func TestRoleChangeDropsCarry(t *testing.T) {
 		}
 	}
 	if !found && w.livestockByID(l.ID) != nil {
-		t.Fatalf("guest stranded: cell=%q chair=%+v", l.Cell, w.Machines["chair"])
+		t.Fatalf("captive stranded: cell=%q chair=%+v", l.Cell, w.Machines["chair"])
 	}
 	if m := w.Machines["chipper"]; m != nil && m.Item == "" && m.Busy > 0 {
 		t.Fatal("the chipper ate something that wasn't a bag")

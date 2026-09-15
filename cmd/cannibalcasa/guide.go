@@ -18,7 +18,7 @@ var guide = []section{
 		{Kind: "info", Text: "Winning is surviving and eating well: stars come from good dishes and dinner parties. Losing is the raid (Heat 100) or starving. A relative then inherits the house."},
 	}},
 	{"Money", []sim.Line{
-		{Kind: "cash", Text: "WALLETS. Every guest who drops through the mat carries cash. Tech bros, landlords and tourists carry a lot; joggers carry nothing."},
+		{Kind: "cash", Text: "WALLETS. Every captive who drops through the mat carries cash. Tech bros, landlords and tourists carry a lot; joggers carry nothing."},
 		{Kind: "cash", Text: "THE STAND. Policy marks recipes for sale; workers cook them once the shelf is stocked and carry them to the curb stand, which sells one an hour, nine to six. Fritters need no gear; pies need the grinder ($80) and pay better."},
 		{Kind: "cash", Text: "GO OUT (G). A shift at the mall pays $40-60 in four hours. A market run sells everything marked for sale at once. Scavenging finds a little. Raiding a house finds more, or a doorbell camera."},
 		{Kind: "cash", Text: "PASSIVE. A tomato garden pays daily (more per bag composted). An Airbnb listing pays $15 a day. Soap molds sell a bar on Etsy every day."},
@@ -38,17 +38,17 @@ var guide = []section{
 	}},
 	{"Evidence and Heat", []sim.Line{
 		{Kind: "heat", Text: "A body leaves bones, clothes and a phone on the back step. Every bag radiates Heat hourly; the phone pings hard for three days. Disposal: chipper (5 minutes, loud), lye tub (12 hours, silent), compost (a day, silent, feeds the garden), plots (a worker digs), the stockpot (bones into broth), the microwave (phones)."},
-		{Kind: "heat", Text: "Heat cools every hour, faster with a fence and curtains, fastest when nothing is visible. Missing-person reports land once per guest after their notice period. Failed traps and loud machines spike it."},
+		{Kind: "heat", Text: "Heat cools every hour, faster with a fence and curtains, fastest when nothing is visible. Missing-person reports land once per captive after their notice period. Failed traps and loud machines spike it."},
 		{Kind: "heat", Text: "Crossing a tier sends a visitor to the front door. They score what they can see: cars, bags without a fence, screaming without soundproofing (or a Gimp). Pass and Heat drops; fail and it jumps. 100 is the raid."},
 	}},
-	{"Renfields and converts", []sim.Line{
-		{Kind: "fix_closet", Text: "The Chair (six hours, three with the tapes) turns a guest into a Renfield: a worker who needs a cot, food and a TV to stay loyal. Loyalty drifts down; at zero they walk to the police."},
+	{"slaves and converts", []sim.Line{
+		{Kind: "fix_closet", Text: "The Chair (six hours, three with the tapes) turns a captive into a slave: a worker who needs a cot, food and a TV to stay loyal. Loyalty drifts down; at zero they walk to the police."},
 		{Kind: "fix_closet", Text: "Roles (Roster, L): Hand does everything; Cook keeps the kitchen moving; Guard patrols the cells (escapes drop to a third, raiders get caught); Shill works the porch (lures pull harder); Gimp lives in the basement (the livestock goes quiet and stops trying the door)."},
-		{Kind: "fix_closet", Text: "A Renfield who eats six dishes from your shelf knows what they are and asks for seconds. A fellow cannibal: loyal for life, eats half again as much, and goes hunting at night on their own."},
+		{Kind: "fix_closet", Text: "A slave who eats six dishes from your shelf knows what they are and asks for seconds. A fellow cannibal: loyal for life, eats half again as much, and goes hunting at night on their own."},
 	}},
 	{"The mall", []sim.Line{
 		{Kind: "cash", Text: "Tab past the attic and you're at the mall: stores off a concourse, customers all day. Buy a booth on the concourse and they buy what's stocked at mall prices. A kiosk holds more and sells better; a storefront sells to a queue."},
-		{Kind: "cash", Text: "Give a Renfield the Clerk role and they carry stock over from the shelf and mind the counter. A shift at the food court (Go out) now walks you there for real; watch yourself work."},
+		{Kind: "cash", Text: "Give a slave the Clerk role and they carry stock over from the shelf and mind the counter. A shift at the food court (Go out) now walks you there for real; watch yourself work."},
 		{Kind: "heat", Text: "Every sale, at home or at the mall, makes you a little more respectable: Heat cools with commerce."},
 	}},
 	{"Heat: the levers", []sim.Line{
@@ -58,7 +58,7 @@ var guide = []section{
 		{Kind: "heat", Text: "Plots: Enter on a flower bed to dig a bag back up and destroy it properly. Burials older than a month become flowers on their own."},
 	}},
 	{"Going out and raids", []sim.Line{
-		{Kind: "warn", Text: "G sends you out. The house keeps running on your policy; Renfields keep working; livestock still eats. You come home through the front door."},
+		{Kind: "warn", Text: "G sends you out. The house keeps running on your policy; slaves keep working; livestock still eats. You come home through the front door."},
 		{Kind: "warn", Text: "Raiding another house on the street is settled by their defenses (cameras, fence, doorbell camera, guards, anyone awake) against your gear (van, chemistry set). Win: 15% of their cash and a few things from the kitchen. Lose: Heat +10. Once per house per real day. They hear about it either way."},
 		{Kind: "warn", Text: "Your own house can be raided the same way. Cameras, a fence and a Guard are the answer."},
 	}},

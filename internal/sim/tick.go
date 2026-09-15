@@ -447,7 +447,7 @@ func (w *World) tickMachines() {
 			if w.Renfields() < w.CotCount() {
 				w.Workers = append(w.Workers, &Worker{ID: w.newID(), Name: l.Name, Kind: "renfield", Victim: l.Victim,
 					Pos: w.Pos("chair"), Hunger: 60, Energy: 60, Loyalty: 70})
-				w.say("good", "%s blinks twice and asks what needs doing. A Renfield.", l.Name)
+				w.say("good", "%s blinks twice and asks what needs doing. A slave.", l.Name)
 				w.post("info", "has a new 'roommate'. Very quiet. Very helpful.")
 			} else if cell := w.freeCell(); cell != "" {
 				l.Cell = cell

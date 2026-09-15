@@ -76,7 +76,7 @@ func main() {
 		handle = handleArg
 	}
 	if handle == "" {
-		handle = "guest"
+		handle = "captive"
 	}
 
 	if snapshot {

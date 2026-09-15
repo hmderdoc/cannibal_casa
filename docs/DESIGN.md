@@ -1,7 +1,7 @@
 # Cannibal Casa - design
 
 A BBS door (Go, DOOR32.SYS, portable binaries) where the house is a machine
-for processing the neighbors. You don't play a hero walking around; you build
+for butchering the neighbors. You don't play a hero walking around; you build
 and tune a factory and watch it run on a roguelike-style map, in color.
 
 ## Decisions (locked)
@@ -11,7 +11,7 @@ and tune a factory and watch it run on a roguelike-style map, in color.
    just elapsed time the simulation catches up on. There is no separate
    offline rate: what bounds the house while you're gone is the house.
 2. **Resource-driven.** Every flow has a real constraint: intake needs a free
-   cell and a lure, holding costs feed per head per day, processing needs a
+   cell and a lure, holding costs feed per head per day, butchering needs a
    worker and an idle station, storage has capacity, disposal has throughput,
    appliances draw power. A well-designed house reaches a steady state; a
    badly designed one jams, gets loud, and gets raided while you're out.
@@ -36,7 +36,7 @@ and tune a factory and watch it run on a roguelike-style map, in color.
 - **Cells.** Livestock eats ($4/day, $2 with the gruel dispenser) and fattens
   toward marbling 5. Hungry livestock screams, stops fattening, tries the
   door, and dies after a day at zero.
-- **Workers.** The cannibal and any Renfields pick jobs by priority: eat,
+- **Workers.** The cannibal and any slaves pick jobs by priority: eat,
   sleep, feed, plate finished dishes, dispose of bags, butcher (per policy),
   cook (food to a shelf target, then sellable recipes), stock the stand,
   brainwash. Each job is a list of walk-here/work-this-long/then-do steps and
@@ -66,11 +66,11 @@ and tune a factory and watch it run on a roguelike-style map, in color.
   a CPU house or a player's house. The house runs on policy meanwhile.
   Raids on players are settled by the neighborhood layer against the
   target's defenses and land when the raider gets home; the target hears.
-- **Wallets.** Every captured guest carries cash. That, the stand, and
+- **Wallets.** Every captured captive carries cash. That, the stand, and
   errands are the economy; feed and utilities are the drain.
-- **Roles.** Renfields are assigned a form of servitude: hand, cook, guard
+- **Roles.** slaves are assigned a form of servitude: hand, cook, guard
   (escapes and raiders), shill (lures pull harder), gimp (the basement goes
-  quiet). A Renfield who eats six dishes converts: a fellow cannibal, loyal
+  quiet). A slave who eats six dishes converts: a fellow cannibal, loyal
   for life, eating like family, hunting at night on their own.
 
 ## Late game

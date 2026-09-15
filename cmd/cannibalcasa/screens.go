@@ -345,7 +345,7 @@ func (a *app) fixtureStatus(f *sim.Fixture) []sim.Line {
 			}
 			out = append(out, sim.Line{Kind: "busy", Text: fmt.Sprintf("%s is in the chair, %s to go.", name, minutes(m.Busy))})
 		} else {
-			out = append(out, sim.Line{Kind: "info", Text: fmt.Sprintf("Idle. Brainwashing is %s in Policy. Renfields %d, cots %d.", onOff(w.Policy.Brainwash), w.Renfields(), w.CotCount())})
+			out = append(out, sim.Line{Kind: "info", Text: fmt.Sprintf("Idle. Brainwashing is %s in Policy. slaves %d, cots %d.", onOff(w.Policy.Brainwash), w.Renfields(), w.CotCount())})
 		}
 	case sim.KindCell:
 		found := false
@@ -424,7 +424,7 @@ func (a *app) openFixture(f *sim.Fixture) {
 		}
 	}
 	if f.ID == "chair" {
-		items = append(items, item{label: "Put someone in it...", color: ui.Col("fix_closet"), desc: append([]sim.Line{{Kind: "info", Text: "Pick a guest from the cells for the next session."}}, status...),
+		items = append(items, item{label: "Put someone in it...", color: ui.Col("fix_closet"), desc: append([]sim.Line{{Kind: "info", Text: "Pick a captive from the cells for the next session."}}, status...),
 			onSelect: func(a *app) { a.openChairPicker() }})
 		items = append(items, item{label: "Policy: brainwashing " + onOff(a.w.Policy.Brainwash), desc: status, onSelect: func(a *app) { a.openPolicy() }})
 	}
@@ -608,7 +608,7 @@ func (a *app) openPolicy() {
 	}
 	items := []item{
 		{label: fmt.Sprintf("Butcher at marbling %d", p.ButcherMarbling), color: ui.Col("food"),
-			desc:     []sim.Line{{Kind: "info", Text: "Livestock is processed once it fattens to this marbling (1 = as soon as it lands, 5 = wait for prime). Fed livestock gains a point every three days."}},
+			desc:     []sim.Line{{Kind: "info", Text: "Livestock is butchered once it fattens to this marbling (1 = as soon as it lands, 5 = wait for prime). Fed livestock gains a point every three days."}},
 			onSelect: func(a *app) { p.ButcherMarbling = p.ButcherMarbling%5 + 1; set(a, p) }},
 		{label: "Intake: " + intakeName(p.Intake), color: ui.Col("heat"),
 			desc: []sim.Line{{Kind: "info", Text: "Always: the mat fires whenever a cell is free. When the fridge runs low: lures and the mat stay quiet until the fridge is under half full. Never: lay low; nobody gets taken until you say so. The lever for Heat."}},
@@ -624,7 +624,7 @@ func (a *app) openPolicy() {
 				set(a, p)
 			}},
 		{label: "Butcher when every cell is full: " + onOff(p.ButcherWhenFull), color: ui.Col("food"),
-			desc:     []sim.Line{{Kind: "info", Text: "With no free cell the trap can't fire. ON processes the fattest guest to make room."}},
+			desc:     []sim.Line{{Kind: "info", Text: "With no free cell the trap can't fire. ON processes the fattest captive to make room."}},
 			onSelect: func(a *app) { p.ButcherWhenFull = !p.ButcherWhenFull; set(a, p) }},
 		{label: fmt.Sprintf("Always keep %d livestock", p.KeepLivestock), color: ui.Col("food"),
 			desc:     []sim.Line{{Kind: "info", Text: "A floor under the herd, for The Chair or a rainy day."}},
@@ -636,7 +636,7 @@ func (a *app) openPolicy() {
 			desc:     []sim.Line{{Kind: "info", Text: "Which sellable recipes get cooked once the shelf is stocked, and which dishes get carried to the curb."}},
 			onSelect: func(a *app) { a.openSellList() }},
 		{label: "Brainwash livestock in The Chair: " + onOff(p.Brainwash), color: ui.Col("fix_closet"),
-			desc:     []sim.Line{{Kind: "info", Text: "Needs The Chair and a free cot. Turns the least combative guest into a Renfield who works the house."}},
+			desc:     []sim.Line{{Kind: "info", Text: "Needs The Chair and a free cot. Turns the least combative captive into a slave who works the house."}},
 			onSelect: func(a *app) { p.Brainwash = !p.Brainwash; set(a, p) }},
 		{label: fmt.Sprintf("Feed reserve $%d", p.FeedReserve), color: ui.Col("cash"),
 			desc:     []sim.Line{{Kind: "info", Text: "Livestock isn't fed when cash would drop below this. Hungry livestock screams, stops fattening, and eventually dies on the step."}},
@@ -722,12 +722,12 @@ func (a *app) openRoster() {
 		col := ui.Col("player")
 		kind := "cannibal"
 		if wk.Kind == "renfield" {
-			col, kind = ui.Col("fix_closet"), fmt.Sprintf("Renfield, loyalty %.0f", wk.Loyalty)
+			col, kind = ui.Col("fix_closet"), fmt.Sprintf("slave, loyalty %.0f", wk.Loyalty)
 		}
 		if wk.Kind == "convert" {
 			col, kind = ui.Col("player"), "fellow cannibal, "+strings.ToLower(sim.RoleName(wk.Role))
 		} else if wk.Kind == "renfield" {
-			kind = fmt.Sprintf("Renfield %s, loyalty %.0f, %d/%d meals", strings.ToLower(sim.RoleName(wk.Role)), wk.Loyalty, wk.Meals, sim.ConvertMeals)
+			kind = fmt.Sprintf("slave %s, loyalty %.0f, %d/%d meals", strings.ToLower(sim.RoleName(wk.Role)), wk.Loyalty, wk.Meals, sim.ConvertMeals)
 		}
 		items = append(items, item{label: fmt.Sprintf("%-12s %-30s hunger %3.0f energy %3.0f", wk.Name, trunc(kind, 30), wk.Hunger, wk.Energy), color: col,
 			desc: append(describeWorker(a, wk), sim.Line{Kind: "dim", Text: map[bool]string{true: "Enter: assign a role.", false: ""}[wk.Kind != "cannibal"]}),
@@ -917,7 +917,7 @@ func (a *app) openNeighborhood() {
 			label, col = "* "+label, ui.Col("bright")
 		}
 		it := item{label: label, color: col,
-			desc: []sim.Line{{Kind: "info", Text: fmt.Sprintf("%s on %s. %d livestock, %d Renfields, %d meals.", n.Handle, n.BBS, n.Livestock, n.Renfields, n.Meals)}}}
+			desc: []sim.Line{{Kind: "info", Text: fmt.Sprintf("%s on %s. %d livestock, %d slaves, %d meals.", n.Handle, n.BBS, n.Livestock, n.Renfields, n.Meals)}}}
 		if n.Key != me {
 			it.desc = append(it.desc, sim.Line{Kind: "dim", Text: "Enter: anonymous tip to the HOA (+10 Heat for them, may backfire). Casseroles go from the Inventory (I)."})
 			it.onSelect = func(a *app) {
@@ -1018,7 +1018,7 @@ func deathScreen(a *app) *panel {
 	lines := []sim.Line{
 		{Kind: "bad", Text: fmt.Sprintf("%s: %s.", w.Cannibal, w.Cause)},
 		{Kind: "info", Text: ""},
-		{Kind: "info", Text: fmt.Sprintf("%d days on the cul-de-sac. %d meals. %d stars. %d guests captured, %d escaped, %d dinner parties, %d items sold.", w.DaysAlive(), w.Stats.Meals, w.Stars, w.Stats.Captured, w.Stats.Escaped, w.Stats.Dinners, w.Stats.Sold)},
+		{Kind: "info", Text: fmt.Sprintf("%d days on the cul-de-sac. %d meals. %d stars. %d captives captured, %d escaped, %d dinner parties, %d items sold.", w.DaysAlive(), w.Stats.Meals, w.Stars, w.Stats.Captured, w.Stats.Escaped, w.Stats.Dinners, w.Stats.Sold)},
 		{Kind: "info", Text: ""},
 		{Kind: "warn", Text: "A relative will inherit the house. Fixtures stay; cash is halved; the basement, the fridge and the back step come empty; the neighbors come curious."},
 		{Kind: "dim", Text: "Press any key to read the will."},
