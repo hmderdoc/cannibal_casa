@@ -353,6 +353,8 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	statBg(b, x2+1, y, "Buried", fmt.Sprintf("%d/%d", s.Buried, s.PlotCap()), pick(s.Buried >= s.PlotCap() && s.PlotCap() > 0, ui.Col("warn"), ui.Col("text")), lineBg)
 	b.Set(ox+w-1, y, '│', ui.Col("border2"), ui.Black)
 	y++
+	divider(b, ox, y, w)
+	y++
 
 	p := s.Player()
 	// Hunger, and what feeds you.
@@ -377,6 +379,8 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 	x2 = stat(b, x2+1, y, "Meat", meat, pick(fresh >= s.FridgeCap(), ui.Col("bad"), ui.Col("food")))
 	stat(b, x2+1, y, "Cells", fmt.Sprintf("%d/%d", len(s.Livestock), len(s.Cells())), pick(hungry > 0, ui.Col("warn"), ui.Col("food")))
 	b.Set(ox+w-1, y, '│', ui.Col("border2"), ui.Black)
+	y++
+	divider(b, ox, y, w)
 	y++
 
 	// Energy, and what pays.
@@ -470,6 +474,16 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 		}
 		b.PrintN(x, oy+h-2, " "+alert, iw, ui.Col("strip_fg"), bg)
 	}
+}
+
+// divider draws a single-line rule joined to the sidebar frame.
+func divider(b *ui.Buffer, ox, y, w int) {
+	col := ui.Col("border2")
+	b.Set(ox, y, '├', col, ui.Black)
+	for x := ox + 1; x < ox+w-1; x++ {
+		b.Set(x, y, '─', col, ui.Black)
+	}
+	b.Set(ox+w-1, y, '┤', col, ui.Black)
 }
 
 // stat prints "Label value" with the label in gray and returns the x after it.
