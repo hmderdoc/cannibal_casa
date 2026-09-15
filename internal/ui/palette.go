@@ -85,7 +85,7 @@ var Palette = map[string]Attr{
 	"bg_sidewalk": Attr{0, 237},
 	"player":      Yellow,
 	"slot_empty":  Gray,
-	"label":       Gray,
+	"label":       White, // HUD labels: light gray, not dark
 	// fixtures
 	"fix_kitchen": BrightWhite,
 	"fix_cold":    BrightCyan,
