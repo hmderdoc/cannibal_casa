@@ -232,11 +232,8 @@ func (a *app) drawMap(ox, oy int) {
 			continue
 		}
 		g, col := '@', ui.Col("player")
-		switch wk.Kind {
-		case "renfield":
-			g, col = 'r', ui.Col("fix_closet")
-		case "convert":
-			g, col = '&', ui.Col("player")
+		if wk.Kind != "cannibal" {
+			g, col = badge(wk)
 		}
 		if wk.Asleep {
 			col = ui.Col("dim")
@@ -430,20 +427,17 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 			y++
 			break
 		}
-		g := "@"
-		col := ui.Col("player")
-		if wk.Kind == "renfield" {
-			g, col = "r", ui.Col("fix_closet")
-		}
-		if wk.Kind == "convert" {
-			g = "&"
+		g, col := '@', ui.Col("player")
+		if wk.Kind != "cannibal" {
+			g, col = badge(wk)
 		}
 		label := wk.JobLabel()
 		if out := wk.OutLabel(s.Clock); out != "" {
 			label = out
-			col = ui.Col("warn")
 		}
-		b.PrintN(x, y, trunc(fmt.Sprintf("%s %s: %s", g, firstName(wk.Name), label), iw), iw, col, ui.Black)
+		head := string(g) + " " + firstName(wk.Name) + ": "
+		xx := b.Print(x, y, head, col, ui.Black)
+		b.PrintN(xx, y, trunc(label, iw-len(head)), iw-len(head), ui.Col(wk.JobHue()), ui.Black)
 		y++
 	}
 	if alert != "" {
@@ -470,6 +464,14 @@ func pick(cond bool, a, b ui.Attr) ui.Attr {
 		return a
 	}
 	return b
+}
+
+// badge is a slave's map symbol and color.
+func badge(wk *sim.Worker) (rune, ui.Attr) {
+	if wk.Glyph == "" {
+		return 'r', ui.Col("fix_closet")
+	}
+	return []rune(wk.Glyph)[0], ui.Col(wk.Hue)
 }
 
 func firstName(s string) string {

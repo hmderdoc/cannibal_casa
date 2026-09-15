@@ -75,6 +75,69 @@ type Worker struct {
 	Role     string  `json:"role,omitempty"`   // Renfields: hand | cook | guard | shill | gimp
 	Meals    int     `json:"meals,omitempty"`  // human dishes eaten; enough of them and a Renfield converts
 	Active   int64   `json:"active,omitempty"` // clock of the last real job (not idling or sleeping)
+	Glyph    string  `json:"glyph,omitempty"`  // map symbol, unique per slave in this house
+	Hue      string  `json:"hue,omitempty"`    // palette name for that symbol
+}
+
+// Badges a slave can wear on the map: a digit and a color, handed out so no
+// two slaves in a house look alike.
+var badgeGlyphs = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
+var badgeHues = []string{"badge_magenta", "badge_cyan", "badge_green", "badge_yellow", "badge_blue", "badge_pink", "badge_orange", "badge_lime", "badge_lavender"}
+
+// AssignBadge gives a worker a free glyph and hue. Safe to call again.
+func (w *World) AssignBadge(wk *Worker) {
+	if wk.Kind == "cannibal" || wk.Glyph != "" {
+		return
+	}
+	used := map[string]bool{}
+	for _, o := range w.Workers {
+		used[o.Glyph] = true
+	}
+	for i, g := range badgeGlyphs {
+		if !used[g] {
+			wk.Glyph, wk.Hue = g, badgeHues[i%len(badgeHues)]
+			return
+		}
+	}
+	wk.Glyph, wk.Hue = "r", "fix_closet"
+}
+
+// JobHue names a palette color for what a worker is doing, so a status can
+// be read by color: sleep blue, idle cyan, butchering red, disposal brown,
+// eating green, cooking yellow, out orange.
+func (wk *Worker) JobHue() string {
+	if wk.Asleep {
+		return "job_sleep"
+	}
+	if wk.Away != nil {
+		return "job_out"
+	}
+	if wk.Job == nil {
+		return "job_idle"
+	}
+	switch wk.Job.Kind {
+	case "sleep":
+		return "job_sleep"
+	case "idle":
+		return "job_idle"
+	case "butcher":
+		return "job_butcher"
+	case "dispose", "bury", "haul", "dig":
+		return "job_dispose"
+	case "eat":
+		return "job_eat"
+	case "cook", "collect":
+		return "job_cook"
+	case "feed":
+		return "job_feed"
+	case "stock":
+		return "job_stock"
+	case "brainwash":
+		return "job_chair"
+	case "errand":
+		return "job_out"
+	}
+	return "job_idle"
 }
 
 // Out reports whether a worker is away on an errand, on the map or off it.

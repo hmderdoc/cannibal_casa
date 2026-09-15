@@ -78,6 +78,9 @@ func (st *Store) Load(key string) (*sim.World, error) {
 	if w.Scale <= 0 {
 		w.Scale = sim.DefaultScale
 	}
+	for _, wk := range w.Workers {
+		w.AssignBadge(wk)
+	}
 	if w.Placed == nil {
 		w.Placed = map[string]sim.Pos{}
 	}

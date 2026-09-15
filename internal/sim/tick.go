@@ -445,8 +445,10 @@ func (w *World) tickMachines() {
 			}
 			w.removeLivestock(l.ID)
 			if w.Renfields() < w.CotCount() {
-				w.Workers = append(w.Workers, &Worker{ID: w.newID(), Name: l.Name, Kind: "renfield", Victim: l.Victim,
-					Pos: w.Pos("chair"), Hunger: 60, Energy: 60, Loyalty: 70})
+				nw := &Worker{ID: w.newID(), Name: l.Name, Kind: "renfield", Victim: l.Victim,
+					Pos: w.Pos("chair"), Hunger: 60, Energy: 60, Loyalty: 70}
+				w.AssignBadge(nw)
+				w.Workers = append(w.Workers, nw)
 				w.say("good", "%s blinks twice and asks what needs doing. A slave.", l.Name)
 				w.post("info", "has a new 'roommate'. Very quiet. Very helpful.")
 			} else if cell := w.freeCell(); cell != "" {
@@ -910,6 +912,9 @@ func (w *World) hourly() {
 // by a job nobody holds any more, and a guest out of their cell whom nobody
 // is carrying and who isn't in the chair.
 func (w *World) sweep() {
+	for _, wk := range w.Workers {
+		w.AssignBadge(wk)
+	}
 	for id := range w.Machines {
 		w.reserved(id) // drops any stale claim as a side effect
 	}
