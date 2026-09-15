@@ -729,7 +729,11 @@ func (a *app) openRoster() {
 		} else if wk.Kind == "renfield" {
 			kind = fmt.Sprintf("slave %s, loyalty %.0f, %d/%d meals", strings.ToLower(sim.RoleName(wk.Role)), wk.Loyalty, wk.Meals, sim.ConvertMeals)
 		}
-		items = append(items, item{label: fmt.Sprintf("%-12s %-30s hunger %3.0f energy %3.0f", wk.Name, trunc(kind, 30), wk.Hunger, wk.Energy), color: col,
+		mark := "@"
+		if wk.Kind != "cannibal" {
+			mark = string(sim.RoleGlyph(wk.Role))
+		}
+		items = append(items, item{label: fmt.Sprintf("%s %-12s %-28s hunger %3.0f energy %3.0f", mark, wk.Name, trunc(kind, 28), wk.Hunger, wk.Energy), color: col,
 			desc: append(describeWorker(a, wk), sim.Line{Kind: "dim", Text: map[bool]string{true: "Enter: assign a role.", false: ""}[wk.Kind != "cannibal"]}),
 			onSelect: func(a *app) {
 				if wk.Kind == "cannibal" {
@@ -782,7 +786,7 @@ func (a *app) openRoles(wk *sim.Worker) {
 	var items []item
 	for _, r := range sim.Roles {
 		r := r
-		label := r.Name
+		label := string(sim.RoleGlyph(r.ID)) + "  " + r.Name
 		if wk.Role == r.ID || (wk.Role == "" && r.ID == sim.RoleHand) {
 			label += "  (current)"
 		}

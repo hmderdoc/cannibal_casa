@@ -467,12 +467,12 @@ func pick(cond bool, a, b ui.Attr) ui.Attr {
 	return b
 }
 
-// badge is a slave's map symbol and color.
+// badge is a slave's map symbol (their role) and color (their own).
 func badge(wk *sim.Worker) (rune, ui.Attr) {
-	if wk.Glyph == "" {
-		return 'r', ui.Col("fix_closet")
+	if wk.Hue == "" {
+		return sim.RoleGlyph(wk.Role), ui.Col("fix_closet")
 	}
-	return []rune(wk.Glyph)[0], ui.Col(wk.Hue)
+	return sim.RoleGlyph(wk.Role), ui.Col(wk.Hue)
 }
 
 func firstName(s string) string {

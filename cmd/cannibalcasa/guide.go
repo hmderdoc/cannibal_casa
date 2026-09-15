@@ -43,7 +43,7 @@ var guide = []section{
 	}},
 	{"slaves and converts", []sim.Line{
 		{Kind: "fix_closet", Text: "The Chair (six hours, three with the tapes) turns a captive into a slave: a worker who needs a cot, food and a TV to stay loyal. Loyalty drifts down; at zero they walk to the police."},
-		{Kind: "fix_closet", Text: "Roles (Roster, L): Hand does everything; Cook keeps the kitchen moving; Guard patrols the cells (escapes drop to a third, raiders get caught); Shill works the porch (lures pull harder); Gimp lives in the basement (the livestock goes quiet and stops trying the door)."},
+		{Kind: "fix_closet", Text: "Roles (Roster, L): H Hand does everything; C Cook keeps the kitchen moving; X Guard patrols the cells (escapes drop to a third, raiders get caught); S Shill works the porch (lures pull harder); G Gimp lives in the basement (the livestock goes quiet and stops trying the door); K Clerk works the mall booth. The letter is their map symbol; the color is theirs alone."},
 		{Kind: "fix_closet", Text: "A slave who eats six dishes from your shelf knows what they are and asks for seconds. A fellow cannibal: loyal for life, eats half again as much, and goes hunting at night on their own."},
 	}},
 	{"The mall", []sim.Line{

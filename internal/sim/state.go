@@ -75,31 +75,48 @@ type Worker struct {
 	Role     string  `json:"role,omitempty"`   // Renfields: hand | cook | guard | shill | gimp
 	Meals    int     `json:"meals,omitempty"`  // human dishes eaten; enough of them and a Renfield converts
 	Active   int64   `json:"active,omitempty"` // clock of the last real job (not idling or sleeping)
-	Glyph    string  `json:"glyph,omitempty"`  // map symbol, unique per slave in this house
-	Hue      string  `json:"hue,omitempty"`    // palette name for that symbol
+	Glyph    string  `json:"glyph,omitempty"`  // unused since role symbols; kept so old saves load
+	Hue      string  `json:"hue,omitempty"`    // palette name, unique per slave in this house
 }
 
-// Badges a slave can wear on the map: a digit and a color, handed out so no
-// two slaves in a house look alike.
-var badgeGlyphs = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
+// A slave's map symbol says what they're for; their color is their own,
+// handed out so no two slaves in a house share one.
 var badgeHues = []string{"badge_magenta", "badge_cyan", "badge_green", "badge_yellow", "badge_blue", "badge_pink", "badge_orange", "badge_lime", "badge_lavender"}
 
-// AssignBadge gives a worker a free glyph and hue. Safe to call again.
+// RoleGlyph is the map symbol for a role: H hand, C cook, X guard (arms
+// crossed at the door), S shill, G gimp, K clerk.
+func RoleGlyph(role string) rune {
+	switch role {
+	case RoleCook:
+		return 'C'
+	case RoleGuard:
+		return 'X'
+	case RoleShill:
+		return 'S'
+	case RoleGimp:
+		return 'G'
+	case RoleClerk:
+		return 'K'
+	}
+	return 'H'
+}
+
+// AssignBadge gives a worker a color of their own. Safe to call again.
 func (w *World) AssignBadge(wk *Worker) {
-	if wk.Kind == "cannibal" || wk.Glyph != "" {
+	if wk.Kind == "cannibal" || wk.Hue != "" {
 		return
 	}
 	used := map[string]bool{}
 	for _, o := range w.Workers {
-		used[o.Glyph] = true
+		used[o.Hue] = true
 	}
-	for i, g := range badgeGlyphs {
-		if !used[g] {
-			wk.Glyph, wk.Hue = g, badgeHues[i%len(badgeHues)]
+	for _, h := range badgeHues {
+		if !used[h] {
+			wk.Hue = h
 			return
 		}
 	}
-	wk.Glyph, wk.Hue = "r", "fix_closet"
+	wk.Hue = badgeHues[len(w.Workers)%len(badgeHues)]
 }
 
 // JobHue names a palette color for what a worker is doing, so a status can
