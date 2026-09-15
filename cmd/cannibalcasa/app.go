@@ -221,7 +221,7 @@ func (a *app) inspectCursor() {
 	pos := sim.Pos{L: a.level, X: a.cx, Y: a.cy}
 	for _, wk := range a.w.Workers {
 		if wk.Pos == pos {
-			a.modal = textPanel(wk.Name, describeWorker(wk))
+			a.modal = textPanel(wk.Name, describeWorker(a, wk))
 			return
 		}
 	}
@@ -543,7 +543,7 @@ func visitorText(v *sim.Visitor) string {
 	return v.Name
 }
 
-func describeWorker(wk *sim.Worker) []sim.Line {
+func describeWorker(a *app, wk *sim.Worker) []sim.Line {
 	kind := "The cannibal of the house."
 	switch wk.Kind {
 	case "renfield":
@@ -551,8 +551,8 @@ func describeWorker(wk *sim.Worker) []sim.Line {
 	case "convert":
 		kind = fmt.Sprintf("A fellow cannibal (%s), formerly a %s. Loyal for life. Eats like family, hunts at night on their own.", strings.ToLower(sim.RoleName(wk.Role)), strings.ToLower(sim.VictimByID(wk.Victim).Name))
 	}
-	if wk.Away != nil {
-		return []sim.Line{{Kind: "info", Text: kind}, {Kind: "warn", Text: fmt.Sprintf("Out: %s.", wk.Away.Label)}}
+	if wk.Out() {
+		return []sim.Line{{Kind: "info", Text: kind}, {Kind: "warn", Text: "Out: " + wk.OutLabel(a.w.Clock) + "."}}
 	}
 	return []sim.Line{
 		{Kind: "info", Text: kind},

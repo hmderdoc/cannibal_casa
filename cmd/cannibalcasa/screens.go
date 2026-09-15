@@ -510,7 +510,7 @@ func (a *app) openGoOut() {
 		return
 	}
 	if p.Out() {
-		a.modal = textPanel("You're out", []sim.Line{{Kind: "warn", Text: capitalize(p.Job.Label) + ". Tab over to the mall to watch. The house runs itself meanwhile."}})
+		a.modal = textPanel("You're out", []sim.Line{{Kind: "warn", Text: capitalize(p.OutLabel(w.Clock)) + ". Tab over to the mall to watch. The house runs itself meanwhile."}})
 		return
 	}
 	var items []item
@@ -730,10 +730,10 @@ func (a *app) openRoster() {
 			kind = fmt.Sprintf("Renfield %s, loyalty %.0f, %d/%d meals", strings.ToLower(sim.RoleName(wk.Role)), wk.Loyalty, wk.Meals, sim.ConvertMeals)
 		}
 		items = append(items, item{label: fmt.Sprintf("%-12s %-30s hunger %3.0f energy %3.0f", wk.Name, trunc(kind, 30), wk.Hunger, wk.Energy), color: col,
-			desc: append(describeWorker(wk), sim.Line{Kind: "dim", Text: map[bool]string{true: "Enter: assign a role.", false: ""}[wk.Kind != "cannibal"]}),
+			desc: append(describeWorker(a, wk), sim.Line{Kind: "dim", Text: map[bool]string{true: "Enter: assign a role.", false: ""}[wk.Kind != "cannibal"]}),
 			onSelect: func(a *app) {
 				if wk.Kind == "cannibal" {
-					a.modal = textPanel(wk.Name, describeWorker(wk))
+					a.modal = textPanel(wk.Name, describeWorker(a, wk))
 					return
 				}
 				a.openRoles(wk)

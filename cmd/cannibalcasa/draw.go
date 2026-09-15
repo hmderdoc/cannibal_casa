@@ -439,9 +439,8 @@ func (a *app) drawSidebar(ox, oy, w, h int) {
 			g = "&"
 		}
 		label := wk.JobLabel()
-		if wk.Away != nil {
-			left := wk.Away.Until - s.Clock
-			label = fmt.Sprintf("away, back in %dh%02dm", left/60, left%60)
+		if out := wk.OutLabel(s.Clock); out != "" {
+			label = out
 			col = ui.Col("warn")
 		}
 		b.PrintN(x, y, trunc(fmt.Sprintf("%s %s: %s", g, firstName(wk.Name), label), iw), iw, col, ui.Black)

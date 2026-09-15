@@ -82,6 +82,31 @@ func (wk *Worker) Out() bool {
 	return wk.Away != nil || (wk.Job != nil && wk.Job.Kind == "errand")
 }
 
+// OutLabel describes an errand in progress with the time left: off-map
+// ("away, back in 2h10m") or on-map ("working the food court, 3h05m left";
+// "walking to the mall"; "heading home").
+func (wk *Worker) OutLabel(clock int64) string {
+	if wk.Away != nil {
+		left := wk.Away.Until - clock
+		if left < 0 {
+			left = 0
+		}
+		return fmt.Sprintf("away, back in %dh%02dm", left/60, left%60)
+	}
+	if wk.Job == nil || wk.Job.Kind != "errand" {
+		return ""
+	}
+	j := wk.Job
+	switch {
+	case j.Step >= len(j.Steps)-1:
+		return "heading home"
+	case wk.Pos != j.Steps[0].Dest:
+		return "walking to the mall"
+	default:
+		return fmt.Sprintf("%s, %dh%02dm left", j.Label, j.Timer/60, j.Timer%60)
+	}
+}
+
 // Busy reports whether a worker is doing something worth watching.
 func (wk *Worker) Busy() bool {
 	if wk.Asleep || wk.Job == nil {
